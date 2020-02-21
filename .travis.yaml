@@ -8,7 +8,7 @@ go:
 services:
   - docker
 
-  env:
+env:
   global:
     # Required
     - OS=linux
