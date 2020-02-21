@@ -1,6 +1,7 @@
 #!/bin/bash
+set -e
 
-echo "INSTALL DEPENDENCIES GOES HERE!"
+echo "> Running build/install-dependencies.sh"
 
 _OPERATOR_SDK_VERSION=v0.15.1
 

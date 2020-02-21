@@ -1,5 +1,7 @@
 #!/bin/bash
-echo "BUILD GOES HERE!"
+set -e
+
+echo "> Running build/build.sh"
 
 echo "<repo>/<component>:<tag> : $1"
 
