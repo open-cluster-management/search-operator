@@ -1,0 +1,11 @@
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: search-operator
+subjects:
+- kind: ServiceAccount
+  name: search-operator
+roleRef:
+  kind: Role
+  name: search-operator
+  apiGroup: rbac.authorization.k8s.io
