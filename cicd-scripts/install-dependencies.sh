@@ -5,6 +5,8 @@ echo "> Running build/install-dependencies.sh"
 
 _OPERATOR_SDK_VERSION=v0.15.1
 
+echo "Installing operator-sdk..."
+
 if ! [ -x "$(command -v operator-sdk)" ]; then
     if [[ "$OSTYPE" == "linux-gnu" ]]; then
             curl -L https://github.com/operator-framework/operator-sdk/releases/download/${_OPERATOR_SDK_VERSION}/operator-sdk-${_OPERATOR_SDK_VERSION}-x86_64-linux-gnu -o operator-sdk
