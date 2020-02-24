@@ -15,8 +15,7 @@ spec:
       serviceAccountName: search-operator
       containers:
         - name: search-operator
-          # Replace this with the built image name
-          image: quay.io/jlpadilla/search-operator
+          image: quay.io/open-cluster-management/search-operator
           command:
           - search-operator
           imagePullPolicy: Always
