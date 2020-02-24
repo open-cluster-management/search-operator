@@ -53,21 +53,10 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	}
 
 	// TODO(user): Modify this to be the types you create that are owned by the primary resource
-	// Watch for changes to secondary resource Pods and requeue the owner SearchService
-	err = c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &searchv1alpha1.SearchService{},
-	})
-	if err != nil {
-		return err
-	}
-
-	// TODO(user): Modify this to be the types you create that are owned by the primary resource
-	// Watch for changes to secondary resource Pods and requeue the owner SearchService
+	// Watch for changes to secondary resource Secrets and requeue the owner SearchService
 	err = c.Watch(&source.Kind{Type: &corev1.Secret{}}, &handler.EnqueueRequestForOwner{
 		OwnerType: &searchv1alpha1.SearchService{},
 	})
-	log.Info("Here... Secret changed.")
 	if err != nil {
 		return err
 	}
@@ -140,10 +129,10 @@ func (r *ReconcileSearchService) Reconcile(request reconcile.Request) (reconcile
 	return reconcile.Result{}, nil
 }
 
-// newRedisSecret returns a busybox pod with the same name/namespace as the cr
+// newRedisSecret returns a redisgraph-user-secret with the same name/namespace as the cr
 func newRedisSecret(cr *searchv1alpha1.SearchService) *corev1.Secret {
 	labels := map[string]string{
-		"app": cr.Name,
+		"app": "search",
 	}
 	randomPass := make([]byte, 16)
 	rand.Read(randomPass)
