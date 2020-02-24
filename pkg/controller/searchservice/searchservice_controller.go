@@ -144,7 +144,7 @@ func newRedisSecret(cr *searchv1alpha1.SearchService) *corev1.Secret {
 			Labels:    labels,
 		},
 		Data: map[string][]byte{
-			"redispdw": randomPass,
+			"redispwd": randomPass,
 		},
 	}
 }
