@@ -111,16 +111,15 @@ func (r *ReconcileSearchService) Reconcile(request reconcile.Request) (reconcile
 		return reconcile.Result{}, err
 	}
 
+	// Define a new Secret object
 	secret := newRedisSecret(instance)
-	// Define a new Pod object
-	// pod := newPodForCR(instance)
 
 	// Set SearchService instance as the owner and controller
 	if err := controllerutil.SetControllerReference(instance, secret, r.scheme); err != nil {
 		return reconcile.Result{}, err
 	}
 
-	// Check if this Pod already exists
+	// Check if this Secret already exists
 	found := &corev1.Secret{}
 	err = r.client.Get(context.TODO(), types.NamespacedName{Name: secret.Name, Namespace: secret.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
@@ -130,13 +129,13 @@ func (r *ReconcileSearchService) Reconcile(request reconcile.Request) (reconcile
 			return reconcile.Result{}, err
 		}
 
-		// Pod created successfully - don't requeue
+		// Secret created successfully - don't requeue
 		return reconcile.Result{}, nil
 	} else if err != nil {
 		return reconcile.Result{}, err
 	}
 
-	// Pod already exists - don't requeue
+	// Secret already exists - don't requeue
 	reqLogger.Info("Skip reconcile: Secret already exists", "Secret.Namespace", found.Namespace, "Secret.Name", found.Name)
 	return reconcile.Result{}, nil
 }
