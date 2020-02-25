@@ -125,7 +125,7 @@ func (r *ReconcileSearchService) Reconcile(request reconcile.Request) (reconcile
 	} else if err != nil {
 		return reconcile.Result{}, err
 	}
-
+	reqLogger.Info("DELETE THIS LOG!!! Created pass: ", generatePass(16)) // FIXME
 	// Secret already exists - don't requeue
 	reqLogger.Info("Skip reconcile: Secret already exists", "Secret.Namespace", found.Namespace, "Secret.Name", found.Name)
 	return reconcile.Result{}, nil
@@ -143,7 +143,6 @@ func generatePass(length int) []byte {
 		buf[i] = all[rand.Intn(len(all))]
 	}
 	base64String := b64.StdEncoding.EncodeToString(buf)
-	reqLogger.Info("DELETE THIS LOG!!! Created pass: ", base64String) // FIXME
 
 	return []byte(base64String)
 }
