@@ -2,7 +2,7 @@ package searchservice
 
 import (
 	"context"
-	"crypto/rand"
+	"math/rand"
 	"time"
 
 	searchv1alpha1 "github.com/open-cluster-management/search-operator/pkg/apis/search/v1alpha1"
@@ -130,14 +130,14 @@ func (r *ReconcileSearchService) Reconcile(request reconcile.Request) (reconcile
 	return reconcile.Result{}, nil
 }
 
-func generatePass(int len) []byte {
+func generatePass(length int) []byte {
 	rand.Seed(time.Now().UnixNano())
 	all := "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
 		"abcdefghijklmnopqrstuvwxyz" +
 		"0123456789" +
 		"~=+%^*/()[]{}/!@#$?|"
 
-	buf := make([]byte, len)
+	buf := make([]byte, length)
 	for i := 0; i < length; i++ {
 		buf[i] = all[rand.Intn(len(all))]
 	}
