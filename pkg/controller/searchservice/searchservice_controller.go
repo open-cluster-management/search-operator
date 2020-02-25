@@ -3,6 +3,7 @@ package searchservice
 import (
 	"context"
 	"crypto/rand"
+	"math/big"
 
 	searchv1alpha1 "github.com/open-cluster-management/search-operator/pkg/apis/search/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -129,13 +130,24 @@ func (r *ReconcileSearchService) Reconcile(request reconcile.Request) (reconcile
 	return reconcile.Result{}, nil
 }
 
+func generatePass(length int) []byte {
+	chars := "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
+		"abcdefghijklmnopqrstuvwxyz" +
+		"0123456789"
+
+	buf := make([]byte, length)
+	for i := 0; i < length; i++ {
+		nBig, _ := rand.Int(rand.Reader, big.NewInt(int64(len(chars))))
+		buf[i] = chars[nBig.Int64()]
+	}
+	return buf
+}
+
 // newRedisSecret returns a redisgraph-user-secret with the same name/namespace as the cr
 func newRedisSecret(cr *searchv1alpha1.SearchService) *corev1.Secret {
 	labels := map[string]string{
 		"app": "search",
 	}
-	randomPass := make([]byte, 16)
-	rand.Read(randomPass)
 
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -144,7 +156,7 @@ func newRedisSecret(cr *searchv1alpha1.SearchService) *corev1.Secret {
 			Labels:    labels,
 		},
 		Data: map[string][]byte{
-			"redispwd": randomPass,
+			"redispwd": generatePass(16),
 		},
 	}
 }
