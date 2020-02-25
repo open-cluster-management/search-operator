@@ -2,7 +2,6 @@ package searchservice
 
 import (
 	"context"
-	b64 "encoding/base64"
 	"math/rand"
 	"time"
 
@@ -125,7 +124,7 @@ func (r *ReconcileSearchService) Reconcile(request reconcile.Request) (reconcile
 	} else if err != nil {
 		return reconcile.Result{}, err
 	}
-	reqLogger.Info("DELETE THIS LOG!!! Created pass: ", generatePass(16)) // FIXME
+	// reqLogger.Info("DELETE THIS LOG!!! Created pass: ", generatePass(16)) // FIXME
 	// Secret already exists - don't requeue
 	reqLogger.Info("Skip reconcile: Secret already exists", "Secret.Namespace", found.Namespace, "Secret.Name", found.Name)
 	return reconcile.Result{}, nil
@@ -135,16 +134,17 @@ func generatePass(length int) []byte {
 	rand.Seed(time.Now().UnixNano())
 	all := "ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
 		"abcdefghijklmnopqrstuvwxyz" +
-		"0123456789" +
-		"~=+%^*/()[]{}/!@#$?|"
+		"0123456789"
+		// "~=+%^*/()[]{}/!@#$?|"
 
 	buf := make([]byte, length)
 	for i := 0; i < length; i++ {
 		buf[i] = all[rand.Intn(len(all))]
 	}
-	base64String := b64.StdEncoding.EncodeToString(buf)
+	// base64String := b64.StdEncoding.EncodeToString(buf)
+	// return []byte(base64String)
 
-	return []byte(base64String)
+	return buf
 }
 
 // newRedisSecret returns a redisgraph-user-secret with the same name/namespace as the cr
