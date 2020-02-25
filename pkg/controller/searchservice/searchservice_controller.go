@@ -142,7 +142,8 @@ func generatePass(length int) []byte {
 	for i := 0; i < length; i++ {
 		buf[i] = all[rand.Intn(len(all))]
 	}
-	base64String := b64.StdEncoding.EncodeToString([]byte(buf))
+	base64String := b64.StdEncoding.EncodeToString(buf)
+	reqLogger.Info("DELETE THIS LOG!!! Created pass: ", base64String) // FIXME
 
 	return []byte(base64String)
 }
