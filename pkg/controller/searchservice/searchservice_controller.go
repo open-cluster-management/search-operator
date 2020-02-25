@@ -2,6 +2,7 @@ package searchservice
 
 import (
 	"context"
+	b64 "encoding/base64"
 	"math/rand"
 	"time"
 
@@ -141,7 +142,7 @@ func generatePass(length int) []byte {
 	for i := 0; i < length; i++ {
 		buf[i] = all[rand.Intn(len(all))]
 	}
-	base64String := sEnc := b64.StdEncoding.EncodeToString([]byte(buf))
+	base64String := b64.StdEncoding.EncodeToString([]byte(buf))
 
 	return []byte(base64String)
 }
