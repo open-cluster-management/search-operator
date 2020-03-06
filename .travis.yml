@@ -60,6 +60,7 @@ jobs:
           make 
           make component/pull 
           make component/test/e2e
+          make security/scans
     - stage: publish
       name: "Publish the image to quay with an official version/sha tag and publish entry to integration pipeline stage"
       if: type = push AND branch =~ /^release-[0-9]+\..*$/
