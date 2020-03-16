@@ -79,3 +79,6 @@ tags
 .build-harness-bootstrap
 build-harness-extensions/
 build-harness/
+!vbh/.build-harness-vendorized
+!vbh/build-harness
+!vbh/build-harness-extensions
