@@ -8,6 +8,12 @@ go:
 services:
   - docker
 
+addons:
+  sonarcloud:
+    organization: "open-cluster-management"
+    token:
+      secure: "FzxghAaLZvjSDyjrCjurKSZZXNuNre8rkUPKbZoAlp7ha4sOtySVPQGrJIErqmKc/H2S+GJNQ9SxWQuIBGss6Tqcqh9QKGWj0zmlJWxpG3WuCeq53aChr7fmR/bpDnPQfv0kiRfImaIejBvH5xMPq7l/Z/5bpmZ/6kaGMpibtoaJl3o88wKTpzdtoUepLKSrl89bzkk93xfIq3wT+oxskG+312tXmy02hDfJZK8gIiqvzvzcbvJRvwTArPgiaep77F7DCyS1guaKmfTCcL/La+f3yWDh+olS1Z+JNfpItLqe3uehw9MxHi1WbTHmNh7uNFC3/3gMe4rI/SGsO/wReyHD9Cg9nweFpj7L/ytjQUuZaCthfWuovZ5LM9yPV2BFEF+d6VaquKrpl97sjMSdoen/olx428OFKVRupQUfk5ZYGOpgUBiCcdxq8DmbI4hOvvx3pDdXrdoSkAFzS3wVQB9jjaGccu72yWK2zn3DEC497WUAQ7VesqY9NIb5jGl5RVZIdbcac3cBXVerj6iVpAEj4pbyKkmjouY7RaR1ocVvEwBo0Af2TmPvu8gAeMKRe42Y123cb4mhcbgfH7FaFhZpgGR8VVH/AQi5y7gx+/QxHzv4N42QNAraL80anUFn7oPPtXlvIsHqtYTA8VObHfEPVRZOIVPSS4xLnSk54UA="
+
 branches:
   only:
     - master
@@ -31,8 +37,12 @@ stages:
   - build
   - unit-test
   - test-e2e
+  - release-ff
   - publish
 
+before_script:
+  - make init
+  
 jobs:
   include:
     - stage: build
@@ -45,7 +55,6 @@ jobs:
           make component/push
     - stage: unit-test
       name: "Run unit tests"
-      if: type = pull_request
       script:
         # Set the image tag differently for PRs
         - if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then export COMPONENT_TAG_EXTENSION="-PR${TRAVIS_PULL_REQUEST}-${TRAVIS_COMMIT}"; fi;
@@ -54,7 +63,7 @@ jobs:
           make 
           make component/pull 
           make component/test/unit
-        # make sonar/go
+          make sonar/go
     - stage: test-e2e
       name: "Deploy the image to a cluster and run e2e tests"
       if: type = pull_request
@@ -65,6 +74,13 @@ jobs:
           make 
           make component/pull 
           make component/test/e2e
+          make security/scans
+    - stage: release-ff
+      name: "Push commits to current release branch"
+      if: type = push AND branch =~ /^master$/
+      script:
+        - make
+        - make release-ff
     - stage: publish
       name: "Publish the image to quay with an official version/sha tag and publish entry to integration pipeline stage"
       if: type = push AND branch =~ /^release-[0-9]+\..*$/
