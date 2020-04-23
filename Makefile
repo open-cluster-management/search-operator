@@ -1,5 +1,4 @@
 
-BEFORE_SCRIPT := $(shell build/before-make.sh)
 
 USE_VENDORIZED_BUILD_HARNESS ?=
 
