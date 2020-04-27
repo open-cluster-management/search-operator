@@ -10,6 +10,8 @@ endif
 
 unit-tests:
 	@echo "TODO: Run unit-tests"
+	go test ./... -v -coverprofile cover.out
+	go tool cover -html=cover.out -o=cover.html
 
 e2e-tests:
 	@echo "TODO: Run e2e-tests"
