@@ -15,3 +15,6 @@ unit-tests:
 
 e2e-tests:
 	@echo "TODO: Run e2e-tests"
+
+copyright-check:
+	./cicd-scripts/copyright-check.sh
