@@ -3,9 +3,6 @@ module github.com/open-cluster-management/search-operator
 go 1.13
 
 require (
-	github.com/aws/aws-sdk-go v1.25.48 // indirect
-	github.com/edsrzf/mmap-go v1.0.0 // indirect
-	github.com/google/pprof v0.0.0-20190723021845-34ac40c74b70 // indirect
 	github.com/operator-framework/operator-sdk v0.17.0
 	github.com/spf13/pflag v1.0.5
 	k8s.io/api v0.17.4
