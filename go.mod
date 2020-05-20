@@ -3,12 +3,15 @@ module github.com/open-cluster-management/search-operator
 go 1.13
 
 require (
-	github.com/operator-framework/operator-sdk v0.15.2
+	github.com/aws/aws-sdk-go v1.25.48 // indirect
+	github.com/edsrzf/mmap-go v1.0.0 // indirect
+	github.com/google/pprof v0.0.0-20190723021845-34ac40c74b70 // indirect
+	github.com/operator-framework/operator-sdk v0.17.0
 	github.com/spf13/pflag v1.0.5
-	k8s.io/api v0.0.0
-	k8s.io/apimachinery v0.0.0
+	k8s.io/api v0.17.4
+	k8s.io/apimachinery v0.17.4
 	k8s.io/client-go v12.0.0+incompatible
-	sigs.k8s.io/controller-runtime v0.4.0
+	sigs.k8s.io/controller-runtime v0.5.2
 )
 
 // Pinned to kubernetes-1.16.2
