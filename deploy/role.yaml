@@ -1,3 +1,5 @@
+# Copyright (c) 2020 Red Hat, Inc.
+
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -7,52 +9,11 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - pods
-  - services
-  - services/finalizers
-  - endpoints
-  - persistentvolumeclaims
-  - events
-  - configmaps
   - secrets
   verbs:
   - create
-  - delete
-  - get
   - list
-  - patch
-  - update
   - watch
-- apiGroups:
-  - apps
-  resources:
-  - deployments
-  - daemonsets
-  - replicasets
-  - statefulsets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - monitoring.coreos.com
-  resources:
-  - servicemonitors
-  verbs:
-  - get
-  - create
-- apiGroups:
-  - apps
-  resourceNames:
-  - search-operator
-  resources:
-  - deployments/finalizers
-  verbs:
-  - update
 - apiGroups:
   - ""
   resources:
@@ -60,21 +21,22 @@ rules:
   verbs:
   - get
 - apiGroups:
-  - apps
+  - ""
   resources:
-  - replicasets
-  - deployments
+  - configmaps
+  verbs:
+  - get
+  - create
+- apiGroups:
+  - "apps"
+  resources:
+  - "*" 
   verbs:
   - get
 - apiGroups:
-  - search.acm.com
+  - "search.acm.com"
+  - "search.open-cluster-management.io"
   resources:
-  - '*'
+  - "*"
   verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
+  - "*"
