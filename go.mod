@@ -15,6 +15,9 @@ require (
 replace (
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.3.2+incompatible // Required by OLM
 	github.com/coreos/etcd => github.com/coreos/etcd v3.3.24+incompatible
+	github.com/hashicorp/consul => github.com/hashicorp/consul v1.7.4
+	github.com/openshift/origin => github.com/openshift/origin v1.2.0
+	github.com/prometheus/prometheus => github.com/prometheus/prometheus v2.7.1+incompatible
 	k8s.io/client-go => k8s.io/client-go v0.17.4 // Required by prometheus-operator
 )
 
