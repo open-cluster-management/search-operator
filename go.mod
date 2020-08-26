@@ -14,6 +14,7 @@ require (
 // Pinned to kubernetes-1.16.2
 replace (
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.3.2+incompatible // Required by OLM
+	github.com/coreos/etcd => github.com/coreos/etcd v3.3.24+incompatible
 	k8s.io/client-go => k8s.io/client-go v0.17.4 // Required by prometheus-operator
 )
 
