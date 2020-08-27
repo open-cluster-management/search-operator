@@ -11,14 +11,17 @@ require (
 	sigs.k8s.io/controller-runtime v0.5.2
 )
 
-// Pinned to kubernetes-1.16.2
 replace (
+	k8s.io/kubernetes => k8s.io/kubernetes v1.17.11
 	github.com/Azure/go-autorest => github.com/Azure/go-autorest v13.3.2+incompatible // Required by OLM
 	github.com/coreos/etcd => github.com/coreos/etcd v3.3.24+incompatible
+	github.com/gorilla/websocket v1.4.2 => github.com/gorilla/websocket v1.4.2
 	github.com/hashicorp/consul => github.com/hashicorp/consul v1.7.4
+	github.com/opencontainers/runc => github.com/opencontainers/runc v1.0.0-rc10
 	github.com/openshift/origin => github.com/openshift/origin v1.2.0
 	github.com/prometheus/prometheus => github.com/prometheus/prometheus v2.7.1+incompatible
 	k8s.io/client-go => k8s.io/client-go v0.17.4 // Required by prometheus-operator
+	github.com/gorilla/websocket => github.com/gorilla/websocket v1.4.2
 )
 
-replace github.com/docker/docker => github.com/moby/moby v0.7.3-0.20190826074503-38ab9da00309 // Required by Helm
+replace github.com/docker/docker => github.com/moby/moby v1.2.0 // Required by Helm
