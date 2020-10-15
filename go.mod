@@ -1,6 +1,6 @@
 module github.com/open-cluster-management/search-operator
 
-go 1.13
+go 1.15
 
 require (
 	github.com/operator-framework/operator-sdk v0.17.0
