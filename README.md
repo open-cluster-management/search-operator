@@ -23,4 +23,4 @@ curl -L https://github.com/operator-framework/operator-sdk/releases/download/v0.
 - `go mod vendor`
 - `operator-sdk build <repo>/<component>:<tag>` for example: quay.io/open-cluster-management/search-operator:v0.1.0.
 - Replace the image in `deploy/operator.yaml`.
-- Update your namespace in `deploy/role_binding.yaml`
+- Update your namespace in `deploy/role_binding.yaml`.
