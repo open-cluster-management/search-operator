@@ -3,11 +3,13 @@
 package searchservice
 
 import (
+	"context"
 	"reflect"
 	"testing"
 	"time"
 
 	searchv1alpha1 "github.com/open-cluster-management/search-operator/pkg/apis/search/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -41,6 +43,12 @@ func TestReconcileSearchService_Reconcile(t *testing.T) {
 	// 	ObjectMeta: metav1.ObjectMeta{
 	// 		Name:      "redisgraph-user-secret",
 	// 		Namespace: "test-cluster",
+	// 		Labels: map[string]string{
+	// 			"app": "search",
+	// 		},
+	// 	},
+	// 	Data: map[string][]byte{
+	// 		"redispwd": generatePass(16),
 	// 	},
 	// }
 
@@ -81,7 +89,7 @@ func TestReconcileSearchService_Reconcile(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "secret not found",
+			name: "secret not found", //check if secret got created
 			fields: fields{
 				client: fake.NewFakeClientWithScheme(testscheme, testSearchService),
 				scheme: testscheme,
@@ -96,7 +104,7 @@ func TestReconcileSearchService_Reconcile(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "secret already exists",
+			name: "secret already exists", //check if existing secret is same as testSecret
 			fields: fields{
 				client: fake.NewFakeClientWithScheme(testscheme, testSearchService, testSecret),
 				scheme: testscheme,
@@ -126,6 +134,14 @@ func TestReconcileSearchService_Reconcile(t *testing.T) {
 				return
 			}
 
+			if tt.name == "secret not found" || tt.name == "secret already exists" {
+				found := &corev1.Secret{}
+				err = r.client.Get(context.TODO(), types.NamespacedName{Name: testSecret.Name, Namespace: testSecret.Namespace}, found)
+
+				if found.Name != testSecret.Name || found.Namespace != testSecret.Namespace || !reflect.DeepEqual(found.GetLabels(), testSecret.GetLabels()) {
+					t.Errorf("Secrets not the same = %v/%v/%v, want %v/%v/%v", found.Name, found.Namespace, found.GetLabels(), testSecret.Name, testSecret.Namespace, testSecret.GetLabels())
+				}
+			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("ReconcileSearchService.Reconcile() = %v, want %v", got, tt.want)
 			}
