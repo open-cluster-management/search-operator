@@ -1,0 +1,16 @@
+apiVersion: search.open-cluster-management.io/v1alpha1
+kind: SearchOperator
+metadata:
+  name: example-searchoperator
+spec:
+  # Add fields here
+  limit_cpu: "250m"
+  limit_memory: "1Gi"
+  request_cpu: "25m"
+  request_memory: "64Mi"
+  pullpolicy: "Always"
+  storagesize: "10g"
+  storageclass: "gb2"
+  pullsecret: "multiclusterhub-operator-pull-secret"
+  redisgraph_image: "quay.io/open-cluster-management/redisgraph-tls:2.2.0-PR30-338256dd6806b528e39a76552379da9c3f939b9a"
+
