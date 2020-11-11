@@ -37,22 +37,7 @@ func commonSetup() (*runtime.Scheme, reconcile.Request, *v1alpha1.SearchService,
 		Spec: searchv1alpha1.SearchServiceSpec{},
 	}
 	testSecret := newRedisSecret(testSearchService)
-	// testSecret1 := &corev1.Secret{
-	// 	TypeMeta: metav1.TypeMeta{
-	// 		APIVersion: corev1.SchemeGroupVersion.String(),
-	// 		Kind:       "Secret",
-	// 	},
-	// 	ObjectMeta: metav1.ObjectMeta{
-	// 		Name:      "redisgraph-user-secret",
-	// 		Namespace: "test-cluster",
-	// 		Labels: map[string]string{
-	// 			"app": "search",
-	// 		},
-	// 	},
-	// 	Data: map[string][]byte{
-	// 		"redispwd": generatePass(16),
-	// 	},
-	// }
+
 	req := reconcile.Request{
 		NamespacedName: types.NamespacedName{
 			Name:      "test-cluster",
