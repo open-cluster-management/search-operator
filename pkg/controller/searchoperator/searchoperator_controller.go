@@ -129,7 +129,7 @@ func (r *ReconcileSearchOperator) Reconcile(request reconcile.Request) (reconcil
 			return reconcile.Result{}, err
 		}
 		// Secret created successfully - don't requeue
-		return reconcile.Result{}, nil
+		//return reconcile.Result{}, nil
 	} else if err != nil {
 		return reconcile.Result{}, err
 	}
@@ -305,7 +305,7 @@ func updateRedisDeployment(client client.Client, deployment *appv1.Deployment, n
 			return
 		}
 	} else {
-		if !reflect.DeepEqual(found.Spec, deployment.Spec) {
+		if !reflect.DeepEqual(found.Spec.Template.Spec.Volumes, deployment.Spec.Template.Spec.Volumes) {
 			deployment.ObjectMeta.ResourceVersion = found.ObjectMeta.ResourceVersion
 			err = client.Update(context.TODO(), deployment)
 			if err != nil {
