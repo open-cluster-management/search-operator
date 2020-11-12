@@ -3,6 +3,7 @@ package searchoperator
 import (
 	"context"
 	"crypto/rand"
+	"fmt"
 	"math/big"
 	"reflect"
 	"time"
@@ -12,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -27,8 +29,6 @@ import (
 )
 
 var log = logf.Log.WithName("controller_searchoperator")
-var storageClass string = "gp2"
-var storageSize string = "10Gi"
 
 const pvcName = "redisgraph-pvc"
 
@@ -136,16 +136,28 @@ func (r *ReconcileSearchOperator) Reconcile(request reconcile.Request) (reconcil
 
 	// Secret already exists - don't requeue
 	reqLogger.Info("Skip reconcile: Secret already exists", "Secret.Namespace", found.Namespace, "Secret.Name", found.Name)
+
+	// Setup RedisGraph Deployment
+
 	var deployment *appv1.Deployment
 	if !instance.Spec.Persistence {
 		reqLogger.Info("Creating Empty dir Deployment")
-		deployment = getEmptyDeployment(instance)
-		updateRedisDeployment(r.client, deployment, instance.Namespace)
+		deployment = executeDeployment(r.client, instance, false)
+		//Write Status
+		updateCR(r.client, instance, "Node level persistence using EmptyDir")
 	} else {
 		setupVolume(r.client, instance)
-		reqLogger.Info("Creating PVC Deployment %s , %s", storageClass, storageSize)
-		deployment = getPVCDeployment(instance)
-		updateRedisDeployment(r.client, deployment, instance.Namespace)
+		reqLogger.Info("Creating PVC Deployment with  StorageClass %s , StorageSize %s", instance.Spec.StorageClass, instance.Spec.StorageSize)
+		deployment = executeDeployment(r.client, instance, true)
+		//Write Status
+		updateCR(r.client, instance, "Persistence using PersistenceVolumeClaim")
+		//If Pod cannot be scheduled rollback to EmptyDir
+		if !podScheduled(r.client, instance) {
+			reqLogger.Info("Degrading to  Empty dir Deployment")
+			deployment = executeDeployment(r.client, instance, false)
+			//Write Status
+			updateCR(r.client, instance, "Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim")
+		}
 	}
 	// Set SearchOperator instance as the owner and controller
 	if err := controllerutil.SetControllerReference(instance, deployment, r.scheme); err != nil {
@@ -157,7 +169,7 @@ func (r *ReconcileSearchOperator) Reconcile(request reconcile.Request) (reconcil
 
 func int32Ptr(i int32) *int32 { return &i }
 
-func getEmptyDeployment(cr *searchv1alpha1.SearchOperator) *appv1.Deployment {
+func getDeployment(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.VolumeSource) *appv1.Deployment {
 
 	return &appv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -172,6 +184,7 @@ func getEmptyDeployment(cr *searchv1alpha1.SearchOperator) *appv1.Deployment {
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"component": "redisgraph",
+					"app":       "search-prod",
 				},
 			},
 			Template: v1.PodTemplateSpec{
@@ -231,10 +244,8 @@ func getEmptyDeployment(cr *searchv1alpha1.SearchOperator) *appv1.Deployment {
 							},
 						},
 						{
-							Name: "persist",
-							VolumeSource: v1.VolumeSource{
-								EmptyDir: &v1.EmptyDirVolumeSource{},
-							},
+							Name:         "persist",
+							VolumeSource: rdbVolumeSource,
 						},
 						{
 							Name: "redis-graph-certs",
@@ -265,133 +276,33 @@ func getEmptyDeployment(cr *searchv1alpha1.SearchOperator) *appv1.Deployment {
 	}
 }
 
-func getPVCDeployment(cr *searchv1alpha1.SearchOperator) *appv1.Deployment {
+func updateCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, status string) {
+	pvcLogger := log.WithValues("Request.Namespace", cr.Namespace)
+	cr.Status.PersistenceStatus = status
+	err := kclient.Status().Update(context.TODO(), cr)
+	if err != nil {
+		if apierrors.IsConflict(err) {
+			pvcLogger.Info("Failed to update status", "Reason", "Object has been modified")
+		}
+		pvcLogger.Error(err, fmt.Sprintf("Failed to update %s/%s status ", cr.Namespace, cr.Name))
 
-	return &appv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "search-prod-redisgraph",
-			Namespace: cr.Namespace,
-			Annotations: map[string]string{
-				"owner": "search-operator",
-			},
-		},
-		Spec: appv1.DeploymentSpec{
-			Replicas: int32Ptr(1),
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					"component": "redisgraph",
-					"app":       "search-prod",
-				},
-			},
-			Template: v1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						"component": "redisgraph",
-					},
-				},
-				Spec: v1.PodSpec{
-					ServiceAccountName: "search-operator",
-					ImagePullSecrets: []v1.LocalObjectReference{{
-						Name: cr.Spec.PullSecret,
-					}},
-					Containers: []v1.Container{
-						{
-							Name:  "redisgraph",
-							Image: cr.Spec.RedisgraphImage,
-							Env: []v1.EnvVar{
-								{
-									Name: "REDIS_PASSWORD",
-									ValueFrom: &v1.EnvVarSource{
-										SecretKeyRef: &v1.SecretKeySelector{
-											LocalObjectReference: v1.LocalObjectReference{
-												Name: "redisgraph-user-secret",
-											},
-											Key: "redispwd",
-										},
-									},
-								},
-								{
-									Name:  "REDIS_GRAPH_SSL",
-									Value: "true",
-								},
-							},
-							VolumeMounts: []v1.VolumeMount{
-								{
-									Name:      "redis-graph-certs",
-									MountPath: "/certs",
-								},
-								{
-									Name:      "stunnel-pid",
-									MountPath: "/rg",
-								},
-								{
-									Name:      "persist",
-									MountPath: "/redis-data",
-								},
-							},
-						},
-					},
-					Volumes: []v1.Volume{
-						{
-							Name: "stunnel-pid",
-							VolumeSource: v1.VolumeSource{
-								EmptyDir: &v1.EmptyDirVolumeSource{},
-							},
-						},
-						{
-							Name: "persist",
-							VolumeSource: v1.VolumeSource{
-								PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
-									ClaimName: pvcName,
-								},
-							},
-						},
-						{
-							Name: "redis-graph-certs",
-							VolumeSource: v1.VolumeSource{
-								Secret: &v1.SecretVolumeSource{
-									SecretName: "search-prod-e5b24-redisgraph-secrets",
-									Items: []v1.KeyToPath{
-										{
-											Key:  "ca.crt",
-											Path: "redis.crt",
-										},
-										{
-											Key:  "tls.crt",
-											Path: "server.crt",
-										},
-										{
-											Key:  "tls.key",
-											Path: "server.key",
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
 	}
 }
 
-func updateRedisDeployment(client client.Client, deployment *appv1.Deployment, namespace string) (bool, error) {
-
+func updateRedisDeployment(client client.Client, deployment *appv1.Deployment, namespace string) {
 	found := &appv1.Deployment{}
 	err := client.Get(context.TODO(), types.NamespacedName{Name: "search-prod-redisgraph", Namespace: namespace}, found)
-
 	if err != nil {
 		if errors.IsNotFound(err) {
 			err = client.Create(context.TODO(), deployment)
-
 			if err != nil {
 				log.Error(err, "Failed to create  deployment")
-				return false, err
+				return
 			}
-			log.Info("Created  deployment ")
+			log.Info("Created new  deployment ")
 		} else {
 			log.Error(err, "Failed to get deployment")
-			return false, err
+			return
 		}
 	} else {
 		if !reflect.DeepEqual(found.Spec, deployment.Spec) {
@@ -399,12 +310,11 @@ func updateRedisDeployment(client client.Client, deployment *appv1.Deployment, n
 			err = client.Update(context.TODO(), deployment)
 			if err != nil {
 				log.Error(err, "Failed to update  deployment")
-				return false, err
+				return
 			}
-			log.Info("Updated  deployment ")
+			log.Info("Updated  redisgraph deployment ")
 		}
 	}
-	return true, nil
 }
 
 func getPVC(cr *searchv1alpha1.SearchOperator) *v1.PersistentVolumeClaim {
@@ -426,7 +336,7 @@ func getPVC(cr *searchv1alpha1.SearchOperator) *v1.PersistentVolumeClaim {
 }
 
 //Remove PVC if you have one
-func setupVolume(client client.Client, cr *searchv1alpha1.SearchOperator) (bool, error) {
+func setupVolume(client client.Client, cr *searchv1alpha1.SearchOperator) {
 	pvcLogger := log.WithValues("Request.Namespace", cr.Namespace)
 	found := &v1.PersistentVolumeClaim{}
 	pvc := getPVC(cr)
@@ -438,47 +348,17 @@ func setupVolume(client client.Client, cr *searchv1alpha1.SearchOperator) (bool,
 		if err != nil {
 			pvcLogger.Info("Error Creating a new PVC ", "PVC.Namespace", cr.Namespace, "PVC.Name", pvcName)
 			pvcLogger.Info(err.Error())
-			return false, err
+			return
 		} else {
-			pvcLogger.Info("Createda new PVC ", "PVC.Namespace", cr.Namespace, "PVC.Name", pvcName)
-			return true, nil
+			pvcLogger.Info("Created a new PVC ", "PVC.Namespace", cr.Namespace, "PVC.Name", pvcName)
+			return
 		}
 	} else if err != nil {
-		pvcLogger.Info("Error Finding  PVC ", "PVC.Namespace", cr.Namespace, "PVC.Name", pvcName)
+		pvcLogger.Info("Error finding  PVC ", "PVC.Namespace", cr.Namespace, "PVC.Name", pvcName)
 		//return False and error if there is Error
-		return false, err
-	}
-	//PVC is already present , Now we need to check if the config is updated then
-	// delete PVC and  recreate PVC else leave it as is
-	if !reflect.DeepEqual(found.Spec, pvc.Spec) {
-		pvcLogger.Info("Deleting existing PVC", "PVC.Namespace", cr.Namespace, "PVC.Name", pvcName)
-		err = client.Delete(context.TODO(), pvc)
-		if err != nil {
-			log.Error(err, "Failed to delete PVC", pvcName)
-			return false, err
-		} else {
-			//Check the PVC is really gone checking for 10 s
-			count := 0
-			for count < 20 {
-				err := client.Get(context.TODO(), types.NamespacedName{Name: pvcName, Namespace: cr.Namespace}, found)
-				if err != nil && errors.IsNotFound(err) {
-					break
-				}
-				count++
-				time.Sleep(1 * time.Second)
-			}
-			pvcLogger.Info("Creating a new PVC", "PVC.Namespace", cr.Namespace, "PVC.Name", pvcName)
-			err = client.Create(context.TODO(), pvc)
-			//Return True if sucessfully created pvc else return False
-			if err != nil {
-				return false, err
-			} else {
-				return true, nil
-			}
-		}
+		return
 	}
 	pvcLogger.Info("Using existing PVC")
-	return true, nil
 }
 
 func generatePass(length int) []byte {
@@ -510,4 +390,63 @@ func newRedisSecret(cr *searchv1alpha1.SearchOperator) *corev1.Secret {
 			"redispwd": generatePass(16),
 		},
 	}
+}
+
+func podScheduled(kclient client.Client, cr *searchv1alpha1.SearchOperator) bool {
+	pvcLogger := log.WithValues("Request.Namespace", cr.Namespace)
+	podList := &corev1.PodList{}
+	opts := []client.ListOption{client.MatchingLabels{"component": "redisgraph"}}
+	//Check pod in 5 seconds
+	time.Sleep(5 * time.Second)
+	err := kclient.List(context.TODO(), podList, opts...)
+	if err != nil {
+		return false
+	}
+	//Keep checking status for 4 minutes , if its not running
+	// We assume its not running
+	count := 0
+	for count < 240 {
+		for _, item := range podList.Items {
+			for _, status := range item.Status.Conditions {
+				if status.Reason == "Unschedulable" {
+					pvcLogger.Info("RedisGraph Pod UnScheduleable - likely PVC mount problem")
+					return false
+				}
+			}
+			for _, status := range item.Status.ContainerStatuses {
+				if status.Ready {
+					for _, name := range item.Spec.Volumes {
+						if name.PersistentVolumeClaim != nil && name.PersistentVolumeClaim.ClaimName == pvcName {
+							pvcLogger.Info("RedisGraph Pod Ready")
+							return true
+						}
+					}
+
+				}
+			}
+		}
+		count++
+		time.Sleep(1 * time.Second)
+	}
+
+	return false
+}
+
+func executeDeployment(client client.Client, cr *searchv1alpha1.SearchOperator, usePVC bool) *appv1.Deployment {
+	var deployment *appv1.Deployment
+	emptyDirVolume := v1.VolumeSource{
+		EmptyDir: &v1.EmptyDirVolumeSource{},
+	}
+	pvcVolume := v1.VolumeSource{
+		PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
+			ClaimName: pvcName,
+		},
+	}
+	if !usePVC {
+		deployment = getDeployment(cr, emptyDirVolume)
+	} else {
+		deployment = getDeployment(cr, pvcVolume)
+	}
+	updateRedisDeployment(client, deployment, cr.Namespace)
+	return deployment
 }
