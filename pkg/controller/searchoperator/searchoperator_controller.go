@@ -131,7 +131,6 @@ func (r *ReconcileSearchOperator) Reconcile(request reconcile.Request) (reconcil
 		// Secret created successfully - don't requeue
 		return reconcile.Result{}, nil
 	} else if err != nil {
-		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
 
@@ -140,20 +139,12 @@ func (r *ReconcileSearchOperator) Reconcile(request reconcile.Request) (reconcil
 	var deployment *appv1.Deployment
 	if !instance.Spec.Persistence {
 		reqLogger.Info("Creating Empty dir Deployment")
-		emptyDirVolume := v1.VolumeSource{
-			EmptyDir: &v1.EmptyDirVolumeSource{},
-		}
-		deployment = getDeployment(instance, emptyDirVolume)
+		deployment = getEmptyDeployment(instance)
 		updateRedisDeployment(r.client, deployment, instance.Namespace)
 	} else {
 		setupVolume(r.client, instance)
 		reqLogger.Info("Creating PVC Deployment %s , %s", storageClass, storageSize)
-		pvcVolume := v1.VolumeSource{
-			PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
-				ClaimName: pvcName,
-			},
-		}
-		deployment = getDeployment(instance, pvcVolume)
+		deployment = getPVCDeployment(instance)
 		updateRedisDeployment(r.client, deployment, instance.Namespace)
 	}
 	// Set SearchOperator instance as the owner and controller
@@ -166,7 +157,7 @@ func (r *ReconcileSearchOperator) Reconcile(request reconcile.Request) (reconcil
 
 func int32Ptr(i int32) *int32 { return &i }
 
-func getDeployment(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.VolumeSource) *appv1.Deployment {
+func getEmptyDeployment(cr *searchv1alpha1.SearchOperator) *appv1.Deployment {
 
 	return &appv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -181,7 +172,6 @@ func getDeployment(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.VolumeS
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"component": "redisgraph",
-					"app":       "search-prod",
 				},
 			},
 			Template: v1.PodTemplateSpec{
@@ -241,8 +231,10 @@ func getDeployment(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.VolumeS
 							},
 						},
 						{
-							Name:         "persist",
-							VolumeSource: rdbVolumeSource,
+							Name: "persist",
+							VolumeSource: v1.VolumeSource{
+								EmptyDir: &v1.EmptyDirVolumeSource{},
+							},
 						},
 						{
 							Name: "redis-graph-certs",
@@ -273,7 +265,7 @@ func getDeployment(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.VolumeS
 	}
 }
 
-/*func getPVCDeployment(cr *searchv1alpha1.SearchOperator) *appv1.Deployment {
+func getPVCDeployment(cr *searchv1alpha1.SearchOperator) *appv1.Deployment {
 
 	return &appv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -381,7 +373,7 @@ func getDeployment(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.VolumeS
 			},
 		},
 	}
-}*/
+}
 
 func updateRedisDeployment(client client.Client, deployment *appv1.Deployment, namespace string) (bool, error) {
 
@@ -448,7 +440,7 @@ func setupVolume(client client.Client, cr *searchv1alpha1.SearchOperator) (bool,
 			pvcLogger.Info(err.Error())
 			return false, err
 		} else {
-			pvcLogger.Info("Created a new PVC ", "PVC.Namespace", cr.Namespace, "PVC.Name", pvcName)
+			pvcLogger.Info("Createda new PVC ", "PVC.Namespace", cr.Namespace, "PVC.Name", pvcName)
 			return true, nil
 		}
 	} else if err != nil {
