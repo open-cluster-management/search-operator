@@ -139,29 +139,25 @@ func (r *ReconcileSearchOperator) Reconcile(request reconcile.Request) (reconcil
 
 	// Setup RedisGraph Deployment
 
-	var deployment *appv1.Deployment
 	if !instance.Spec.Persistence {
 		reqLogger.Info("Creating Empty dir Deployment")
-		deployment = executeDeployment(r.client, instance, false)
+		executeDeployment(r.client, instance, false, r.scheme)
 		//Write Status
 		updateCR(r.client, instance, "Node level persistence using EmptyDir")
+
 	} else {
 		setupVolume(r.client, instance)
-		reqLogger.Info("Creating PVC Deployment with  StorageClass %s , StorageSize %s", instance.Spec.StorageClass, instance.Spec.StorageSize)
-		deployment = executeDeployment(r.client, instance, true)
+		reqLogger.Info("Creating PVC Deployment with  ", instance.Spec.StorageClass, instance.Spec.StorageSize)
+		executeDeployment(r.client, instance, true, r.scheme)
 		//Write Status
 		updateCR(r.client, instance, "Persistence using PersistenceVolumeClaim")
 		//If Pod cannot be scheduled rollback to EmptyDir
 		if !podScheduled(r.client, instance) {
 			reqLogger.Info("Degrading to  Empty dir Deployment")
-			deployment = executeDeployment(r.client, instance, false)
+			executeDeployment(r.client, instance, false, r.scheme)
 			//Write Status
 			updateCR(r.client, instance, "Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim")
 		}
-	}
-	// Set SearchOperator instance as the owner and controller
-	if err := controllerutil.SetControllerReference(instance, deployment, r.scheme); err != nil {
-		return reconcile.Result{}, err
 	}
 
 	return reconcile.Result{}, nil
@@ -278,15 +274,30 @@ func getDeployment(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.VolumeS
 
 func updateCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, status string) {
 	pvcLogger := log.WithValues("Request.Namespace", cr.Namespace)
+	found := &searchv1alpha1.SearchOperator{}
+	err := kclient.Get(context.TODO(), types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace}, found)
+	if err != nil {
+		pvcLogger.Error(err, fmt.Sprintf("Failed to get SearchOperator %s/%s ", cr.Namespace, cr.Name))
+	}
 	cr.Status.PersistenceStatus = status
-	err := kclient.Status().Update(context.TODO(), cr)
+	if status == "Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim" {
+		cr.Spec.Persistence = false
+		err := kclient.Update(context.TODO(), cr)
+		if err != nil {
+			pvcLogger.Error(err, fmt.Sprintf("Failed to update SearchOperator %s/%s  ", cr.Namespace, cr.Name))
+			return
+		}
+	}
+	err = kclient.Status().Update(context.TODO(), cr)
 	if err != nil {
 		if apierrors.IsConflict(err) {
-			pvcLogger.Info("Failed to update status", "Reason", "Object has been modified")
+			pvcLogger.Info("Failed to update status Object has been modified")
 		}
 		pvcLogger.Error(err, fmt.Sprintf("Failed to update %s/%s status ", cr.Namespace, cr.Name))
 
 	}
+	pvcLogger.Info(status, "set status")
+	time.Sleep(5 * time.Second)
 }
 
 func updateRedisDeployment(client client.Client, deployment *appv1.Deployment, namespace string) {
@@ -432,7 +443,8 @@ func podScheduled(kclient client.Client, cr *searchv1alpha1.SearchOperator) bool
 	return false
 }
 
-func executeDeployment(client client.Client, cr *searchv1alpha1.SearchOperator, usePVC bool) *appv1.Deployment {
+func executeDeployment(client client.Client, cr *searchv1alpha1.SearchOperator, usePVC bool, scheme *runtime.Scheme) *appv1.Deployment {
+	pvcLogger := log.WithValues("Request.Namespace", cr.Namespace)
 	var deployment *appv1.Deployment
 	emptyDirVolume := v1.VolumeSource{
 		EmptyDir: &v1.EmptyDirVolumeSource{},
@@ -446,6 +458,9 @@ func executeDeployment(client client.Client, cr *searchv1alpha1.SearchOperator, 
 		deployment = getDeployment(cr, emptyDirVolume)
 	} else {
 		deployment = getDeployment(cr, pvcVolume)
+	}
+	if err := controllerutil.SetControllerReference(cr, deployment, scheme); err != nil {
+		pvcLogger.Info("Cannot set deployment OwnerReference", err.Error())
 	}
 	updateRedisDeployment(client, deployment, cr.Namespace)
 	return deployment
