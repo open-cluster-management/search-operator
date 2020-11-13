@@ -443,7 +443,8 @@ func podScheduled(kclient client.Client, cr *searchv1alpha1.SearchOperator) bool
 	return false
 }
 
-func executeDeployment(client client.Client, cr *searchv1alpha1.SearchOperator, usePVC bool, scheme *runtime.Scheme) *appv1.Deployment {
+func executeDeployment(client client.Client, cr *searchv1alpha1.SearchOperator, usePVC bool,
+	scheme *runtime.Scheme) *appv1.Deployment {
 	pvcLogger := log.WithValues("Request.Namespace", cr.Namespace)
 	var deployment *appv1.Deployment
 	emptyDirVolume := v1.VolumeSource{
