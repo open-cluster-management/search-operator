@@ -1,0 +1,24 @@
+# permissions for end users to edit searchoperators.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: searchoperator-editor-role
+rules:
+- apiGroups:
+  - search.open-cluster-management.io
+  resources:
+  - searchoperators
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - search.open-cluster-management.io
+  resources:
+  - searchoperators/status
+  verbs:
+  - get
