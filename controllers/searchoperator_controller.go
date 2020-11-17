@@ -118,12 +118,18 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		if !podScheduled(r.Client, instance, 180) {
 			r.Log.Info("Degrading to  Empty dir Deployment")
 			//Write Status
-			updateCR(r.Client, instance, "Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim", true)
+			err := updateCR(r.Client, instance, "Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim", true)
 			//re queue
-			return ctrl.Result{}, fmt.Errorf("Redisgraph Pod with PVC not running")
+			if err != nil {
+				err = fmt.Errorf("Redisgraph Pod with PVC not running")
+			}
+			return ctrl.Result{}, err
 		} else {
 			//Write Status
-			updateCR(r.Client, instance, "Persistence using PersistenceVolumeClaim", false)
+			err := updateCR(r.Client, instance, "Persistence using PersistenceVolumeClaim", false)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
 		}
 	} else {
 		if !instance.Spec.Persistence && !instance.Spec.Degraded && isPodRunning(r.Client, instance) && instance.Status.PersistenceStatus == "Node level persistence using EmptyDir" {
@@ -136,9 +142,18 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		executeDeployment(r.Client, instance, false, r.Scheme)
 
 		if isPodRunning(r.Client, instance) {
-			if !instance.Spec.Degraded {
+			if instance.Spec.Degraded {
 				//Write Status
-				updateCR(r.Client, instance, "Node level persistence using EmptyDir", false)
+				err := updateCR(r.Client, instance, "Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim", true)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
+			} else {
+				//Write Status
+				err := updateCR(r.Client, instance, "Node level persistence using EmptyDir", false)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
 			}
 		} else {
 			r.Log.Info("Unable to create Redisgraph Deployment")
@@ -265,7 +280,7 @@ func getDeployment(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.VolumeS
 	}
 }
 
-func updateCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, status string, degrade bool) {
+func updateCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, status string, degrade bool) error {
 	found := &searchv1alpha1.SearchOperator{}
 	err := kclient.Get(context.TODO(), types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace}, found)
 	if err != nil {
@@ -276,7 +291,7 @@ func updateCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, status s
 		err := kclient.Update(context.TODO(), cr)
 		if err != nil {
 			log.Error(err, fmt.Sprintf("Failed to update SearchOperator %s/%s  ", cr.Namespace, cr.Name))
-			return
+			return err
 		}
 	}
 	cr.Status.PersistenceStatus = status
@@ -286,10 +301,11 @@ func updateCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, status s
 			log.Info("Failed to update status Object has been modified")
 		}
 		log.Error(err, fmt.Sprintf("Failed to update %s/%s status ", cr.Namespace, cr.Name))
-
+		return err
 	} else {
 		log.Info(fmt.Sprintf("Updated CR status with degrade/persistence %v/%v  ", cr.Spec.Degraded, cr.Spec.Persistence))
 	}
+	return nil
 }
 
 func updateRedisDeployment(client client.Client, deployment *appv1.Deployment, namespace string) {
@@ -466,8 +482,12 @@ func isPodRunning(kclient client.Client, cr *searchv1alpha1.SearchOperator) bool
 		}
 		for _, status := range item.Status.ContainerStatuses {
 			if status.Ready {
-				log.Info("RedisGraph Pod Ready")
-				return true
+				for _, name := range item.Spec.Volumes {
+					if name.EmptyDir != nil {
+						log.Info("RedisGraph Pod  Ready")
+						return true
+					}
+				}
 			}
 		}
 	}
