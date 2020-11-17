@@ -62,10 +62,8 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	_ = context.Background()
 	_ = r.Log.WithValues("searchoperator", req.NamespacedName)
 
-	// your logic here
 	// Fetch the SearchOperator instance
 	instance := &searchv1alpha1.SearchOperator{}
-
 	err := r.Client.Get(context.TODO(), req.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -111,7 +109,6 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			return ctrl.Result{}, nil
 		}
 		setupVolume(r.Client, instance)
-
 		executeDeployment(r.Client, instance, true, r.Scheme)
 
 		//If Pod cannot be scheduled rollback to EmptyDir
@@ -285,6 +282,7 @@ func updateCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, status s
 	err := kclient.Get(context.TODO(), types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace}, found)
 	if err != nil {
 		log.Error(err, fmt.Sprintf("Failed to get SearchOperator %s/%s ", cr.Namespace, cr.Name))
+		return err
 	}
 	if degrade {
 		cr.Spec.Degraded = degrade
