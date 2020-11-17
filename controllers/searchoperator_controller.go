@@ -39,7 +39,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 // SearchOperatorReconciler reconciles a SearchOperator object
@@ -73,10 +72,10 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
-			return reconcile.Result{}, nil
+			return ctrl.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
-		return reconcile.Result{}, err
+		return ctrl.Result{}, err
 	}
 
 	// Define a new Secret object
@@ -84,53 +83,68 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 
 	// Set SearchService instance as the owner and controller
 	if err := controllerutil.SetControllerReference(instance, secret, r.Scheme); err != nil {
-		return reconcile.Result{}, err
+		return ctrl.Result{}, err
 	}
 
 	// Check if this Secret already exists
 	found := &corev1.Secret{}
 	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: secret.Name, Namespace: secret.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
-		r.Log.V(3).Info("Creating a new Secret", "Secret.Namespace", secret.Namespace, "Secret.Name", secret.Name)
+		r.Log.Info("Creating a new Secret", "Secret.Namespace", secret.Namespace, "Secret.Name", secret.Name)
 		err = r.Client.Create(context.TODO(), secret)
 		if err != nil {
-			return reconcile.Result{}, err
+			return ctrl.Result{}, err
 		}
 		// Secret created successfully - don't requeue
 		//return reconcile.Result{}, nil
 	} else if err != nil {
-		return reconcile.Result{}, err
+		return ctrl.Result{}, err
 	} else {
 		// Secret already exists - don't requeue
-		r.Log.V(3).Info("Skip reconcile: Secret already exists", "Secret.Namespace", found.Namespace, "Secret.Name", found.Name)
+		r.Log.Info("Skip reconcile: Secret already exists", "Secret.Namespace", found.Namespace, "Secret.Name", found.Name)
 	}
 
 	// Setup RedisGraph Deployment
-
-	if !instance.Spec.Persistence || instance.Spec.Degraded {
-		r.Log.V(3).Info("Using Empty dir Deployment")
-		executeDeployment(r.Client, instance, false, r.Scheme)
-		// If Degraded mode is set , then the status is aready set
-		// Otherwise this is persistence false case update CR status
-		if !instance.Spec.Degraded {
-			//Write Status
-			updateCR(r.Client, instance, "Node level persistence using EmptyDir", false)
+	r.Log.Info(fmt.Sprintf("Config in Use Persistence/Degrade %v/%v", instance.Spec.Persistence, instance.Spec.Degraded))
+	if instance.Spec.Persistence && !instance.Spec.Degraded {
+		if podScheduled(r.Client, instance, 1) && instance.Status.PersistenceStatus == "Persistence using PersistenceVolumeClaim" {
+			return ctrl.Result{}, nil
 		}
-
-	} else {
 		setupVolume(r.Client, instance)
-		r.Log.V(3).Info("Using PVC Deployment with  ", instance.Spec.StorageClass, instance.Spec.StorageSize)
+
 		executeDeployment(r.Client, instance, true, r.Scheme)
 
 		//If Pod cannot be scheduled rollback to EmptyDir
-		if !podScheduled(r.Client, instance) {
+		if !podScheduled(r.Client, instance, 180) {
 			r.Log.Info("Degrading to  Empty dir Deployment")
 			//Write Status
 			updateCR(r.Client, instance, "Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim", true)
+			//re queue
+			return ctrl.Result{}, fmt.Errorf("Redisgraph Pod with PVC not running")
 		} else {
 			//Write Status
 			updateCR(r.Client, instance, "Persistence using PersistenceVolumeClaim", false)
 		}
+	} else {
+		if !instance.Spec.Persistence && !instance.Spec.Degraded && isPodRunning(r.Client, instance) && instance.Status.PersistenceStatus == "Node level persistence using EmptyDir" {
+			return ctrl.Result{}, nil
+		}
+		if instance.Spec.Degraded && isPodRunning(r.Client, instance) && instance.Status.PersistenceStatus == "Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim" {
+			return ctrl.Result{}, nil
+		}
+		r.Log.Info("Using Empty dir Deployment")
+		executeDeployment(r.Client, instance, false, r.Scheme)
+
+		if isPodRunning(r.Client, instance) {
+			if !instance.Spec.Degraded {
+				//Write Status
+				updateCR(r.Client, instance, "Node level persistence using EmptyDir", false)
+			}
+		} else {
+			r.Log.Info("Unable to create Redisgraph Deployment")
+			return ctrl.Result{}, fmt.Errorf("Redisgraph Pod not running")
+		}
+
 	}
 
 	return ctrl.Result{}, nil
@@ -265,6 +279,7 @@ func updateCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, status s
 			return
 		}
 	}
+	cr.Status.PersistenceStatus = status
 	err = kclient.Status().Update(context.TODO(), cr)
 	if err != nil {
 		if apierrors.IsConflict(err) {
@@ -272,10 +287,9 @@ func updateCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, status s
 		}
 		log.Error(err, fmt.Sprintf("Failed to update %s/%s status ", cr.Namespace, cr.Name))
 
-	} /*else {
-		log.Info(fmt.Sprintf("Updated CR status with degrade/persistence %v/%v status ", *cr.Spec.Degraded, *cr.Spec.Persistence))
-	}*/
-	time.Sleep(5 * time.Second)
+	} else {
+		log.Info(fmt.Sprintf("Updated CR status with degrade/persistence %v/%v  ", cr.Spec.Degraded, cr.Spec.Persistence))
+	}
 }
 
 func updateRedisDeployment(client client.Client, deployment *appv1.Deployment, namespace string) {
@@ -301,7 +315,7 @@ func updateRedisDeployment(client client.Client, deployment *appv1.Deployment, n
 				log.Error(err, "Failed to update  deployment")
 				return
 			}
-			log.Info("Peristence Volume Updated for  redisgraph deployment ")
+			log.Info("Peristence Volume %s Updated for  redisgraph deployment ")
 		} else {
 			log.Info("No changes for redisgraph deployment ")
 		}
@@ -397,19 +411,19 @@ func newRedisSecret(cr *searchv1alpha1.SearchOperator) *corev1.Secret {
 	}
 }
 
-func podScheduled(kclient client.Client, cr *searchv1alpha1.SearchOperator) bool {
+func podScheduled(kclient client.Client, cr *searchv1alpha1.SearchOperator, waitSeconds int) bool {
 	podList := &corev1.PodList{}
 	opts := []client.ListOption{client.MatchingLabels{"component": "redisgraph"}}
-	//Check pod in 5 seconds
-	time.Sleep(5 * time.Second)
+	//Check pod in 1 seconds
+	time.Sleep(1 * time.Second)
 	err := kclient.List(context.TODO(), podList, opts...)
 	if err != nil {
 		return false
 	}
-	//Keep checking status for 4 minutes , if its not running
+	//Keep checking status until waitSeconds
 	// We assume its not running
 	count := 0
-	for count < 240 {
+	for count < waitSeconds {
 		for _, item := range podList.Items {
 			for _, status := range item.Status.Conditions {
 				if status.Reason == "Unschedulable" {
@@ -421,7 +435,7 @@ func podScheduled(kclient client.Client, cr *searchv1alpha1.SearchOperator) bool
 				if status.Ready {
 					for _, name := range item.Spec.Volumes {
 						if name.PersistentVolumeClaim != nil && name.PersistentVolumeClaim.ClaimName == pvcName {
-							log.Info("RedisGraph Pod Ready")
+							log.Info("RedisGraph Pod With PVC Ready")
 							return true
 						}
 					}
@@ -431,6 +445,31 @@ func podScheduled(kclient client.Client, cr *searchv1alpha1.SearchOperator) bool
 		}
 		count++
 		time.Sleep(1 * time.Second)
+	}
+
+	return false
+}
+
+func isPodRunning(kclient client.Client, cr *searchv1alpha1.SearchOperator) bool {
+	podList := &corev1.PodList{}
+	opts := []client.ListOption{client.MatchingLabels{"component": "redisgraph"}}
+	err := kclient.List(context.TODO(), podList, opts...)
+	if err != nil {
+		return false
+	}
+	for _, item := range podList.Items {
+		for _, status := range item.Status.Conditions {
+			if status.Reason == "Unschedulable" {
+				log.Info("RedisGraph Pod UnScheduleable ")
+				return false
+			}
+		}
+		for _, status := range item.Status.ContainerStatuses {
+			if status.Ready {
+				log.Info("RedisGraph Pod Ready")
+				return true
+			}
+		}
 	}
 
 	return false

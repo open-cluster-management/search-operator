@@ -61,7 +61,7 @@ func main() {
 		Port:               9443,
 		LeaderElection:     enableLeaderElection,
 		LeaderElectionID:   "c2dd32d7",
-		Namespace:          "open-cluster-management",
+		Namespace:          os.Getenv("WATCH_NAMESPACE"),
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
