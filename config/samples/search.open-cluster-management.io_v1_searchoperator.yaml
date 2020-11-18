@@ -4,14 +4,16 @@ metadata:
   name: searchoperator
 spec:
   # Add fields here
-  limit_cpu: 250m
-  limit_memory: 1Gi
-  persistence: false
+  redisgraph_resource:
+    limit_cpu: 250m
+    limit_memory: 1Gi
+  persistence: true
+  allowdegrademode: true
   pullpolicy: Always
   pullsecret: multiclusterhub-operator-pull-secret
-  redisgraph_image: quay.io/open-cluster-management/redisgraph-tls:2.2.0-PR30-338256dd6806b528e39a76552379da9c3f939b9a
+  searchimageoverrides:
+    redisgraph_tls: quay.io/open-cluster-management/redisgraph-tls:2.2.0-PR30-338256dd6806b528e39a76552379da9c3f939b9a
   request_cpu: 25m
   request_memory: 64Mi
-  storageclass: ff1
   storagesize: 8Gi
 

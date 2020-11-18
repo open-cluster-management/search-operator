@@ -15,11 +15,57 @@ rules:
   - list
   - watch
 - apiGroups:
+  - apps
+  resources:
+  - '*'
+  verbs:
+  - get
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - search.acm.com
+  - search.open-cluster-management.io
+  resources:
+  - '*'
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - ""
   resources:
   - pods
   verbs:
   - get
+  - list
+  - create
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - persistentvolumeclaims
+  verbs:
+  - get
+  - list
+  - create
+  - update
+  - watch
+  - delete
 - apiGroups:
   - ""
   resources:
@@ -27,16 +73,6 @@ rules:
   verbs:
   - get
   - create
-- apiGroups:
-  - "apps"
-  resources:
-  - "*" 
-  verbs:
-  - get
-- apiGroups:
-  - "search.acm.com"
-  - "search.open-cluster-management.io"
-  resources:
-  - "*"
-  verbs:
-  - "*"
+  - update
+  - watch  
+

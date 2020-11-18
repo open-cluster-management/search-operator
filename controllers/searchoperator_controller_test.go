@@ -21,7 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-func commonSetup() (*runtime.Scheme, reconcile.Request, *searchv1alpha1.SearchOperator, *corev1.Secret, *appv1.Deployment) {
+func commonSetup() (*runtime.Scheme, reconcile.Request, *searchv1alpha1.SearchOperator, *corev1.Secret, *appv1.StatefulSet) {
 	testScheme := scheme.Scheme
 
 	searchv1alpha1.AddToScheme(testScheme)
@@ -129,7 +129,7 @@ func Test_EmptyDirDeploymentCreatedWithOwnerRef(t *testing.T) {
 
 	_, err = nilSearchOperator.Reconcile(req)
 
-	foundDeployment := &appv1.Deployment{}
+	foundDeployment := &appv1.StatefulSet{}
 	err = client.Get(context.TODO(), types.NamespacedName{Name: testDeployment.Name, Namespace: testDeployment.Namespace}, foundDeployment)
 	if err != nil {
 		t.Error("Expected deployment not found. Got error: ", err.Error())
