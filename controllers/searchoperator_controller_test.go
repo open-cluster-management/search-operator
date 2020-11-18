@@ -37,9 +37,9 @@ func commonSetup() (*runtime.Scheme, reconcile.Request, *searchv1alpha1.SearchOp
 			Namespace: "test-cluster",
 		},
 		Spec: searchv1alpha1.SearchOperatorSpec{
-			Persistence: false,
-			Degraded:    false,
-			StorageSize: "1M",
+			Persistence:      false,
+			AllowDegradeMode: true,
+			StorageSize:      "1M",
 		},
 	}
 	testSecret := newRedisSecret(testSearchOperator)
@@ -147,43 +147,5 @@ func Test_EmptyDirDeploymentCreatedWithOwnerRef(t *testing.T) {
 		if ownerRef.APIVersion != searchOperator.APIVersion || ownerRef.Kind != searchOperator.Kind || ownerRef.Name != searchOperator.Name {
 			t.Errorf("Deployment does not have correct ownerReference set. Owner should be searchOperator. Found %v/%v/%v. Expected %v/%v/%v", ownerRef.APIVersion, ownerRef.Kind, ownerRef.Name, searchOperator.APIVersion, searchOperator.Kind, searchOperator.Name)
 		}
-	}
-}
-
-func Test_EmptyDirDeploymentDegradedTrue(t *testing.T) {
-	testScheme, req, searchOperator, testSecret, testDeployment := commonSetup()
-
-	//TODO: Passing already existing secret doesn't set ownerRef - testSecret
-	client := fake.NewFakeClientWithScheme(testScheme, searchOperator, testSecret)
-	nilSearchOperator := SearchOperatorReconciler{client, log, testScheme}
-	var err error
-
-	instance := &searchv1alpha1.SearchOperator{}
-	err = client.Get(context.TODO(), req.NamespacedName, instance)
-	assert.Nil(t, err, "Expected search Operator. Got error: %v", err)
-
-	//Set persistence to true in operator - this should cause degraged mode flag to turn on since we don't have PVC
-	instance.Spec.Persistence = true
-	err = client.Update(context.TODO(), instance)
-	err = client.Get(context.TODO(), req.NamespacedName, instance)
-
-	_, err = nilSearchOperator.Reconcile(req)
-
-	err = client.Get(context.TODO(), req.NamespacedName, instance)
-	assert.Nil(t, err, "Expected search Operator. Got error: %v", err)
-
-	if !instance.Spec.Degraded {
-		t.Errorf("Expected search Operator to be operating in degraded mode. Found instance.Spec.Degraded:%v, Expected: true", instance.Spec.Degraded)
-	}
-	_, err = nilSearchOperator.Reconcile(req)
-
-	foundDeployment := &appv1.Deployment{}
-	err = client.Get(context.TODO(), types.NamespacedName{Name: testDeployment.Name, Namespace: testDeployment.Namespace}, foundDeployment)
-	if err != nil {
-		t.Error("Expected deployment not found. Got error: ", err.Error())
-	}
-
-	if foundDeployment.Name != testDeployment.Name || foundDeployment.Namespace != testDeployment.Namespace || !reflect.DeepEqual(foundDeployment.Spec.Template.Spec, testDeployment.Spec.Template.Spec) {
-		t.Errorf("Expected deployment not found. Deployments not the same. \n\nFound deployment = %v/%v/%v Spec: %v, \n\nExpected =  %v/%v/%v Spec: %v", foundDeployment.Name, foundDeployment.Namespace, foundDeployment.GetLabels(), foundDeployment.Spec.Template.Spec, testDeployment.Name, testDeployment.Namespace, testDeployment.GetLabels(), testDeployment.Spec.Template.Spec)
 	}
 }
