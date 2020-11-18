@@ -37,7 +37,8 @@ type SearchOperatorReconciler struct {
 const pvcName = "redisgraph-pvc"
 
 var (
-	log = logf.Log.WithName("searchoperator")
+	waitSecondsForPodChk = 180
+	log                  = logf.Log.WithName("searchoperator")
 )
 
 // +kubebuilder:rbac:groups=search.open-cluster-management.io,resources=searchoperators,verbs=get;list;watch;create;update;patch;delete
@@ -101,7 +102,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		}
 		setupVolume(r.Client, instance)
 		executeDeployment(r.Client, instance, true, r.Scheme)
-		podReady := podScheduled(r.Client, instance, 180)
+		podReady := podScheduled(r.Client, instance, waitSecondsForPodChk)
 
 		if podReady {
 			//Write Status
@@ -114,7 +115,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		if !podReady && instance.Spec.AllowDegradeMode {
 			r.Log.Info("Degrading Redisgraph deployment to use empty dir.")
 			executeDeployment(r.Client, instance, false, r.Scheme)
-			if isPodRunning(r.Client, instance, 180) {
+			if isPodRunning(r.Client, instance, waitSecondsForPodChk) {
 				//Write Status
 				err := updateCR(r.Client, instance, "Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim")
 				if err != nil {
@@ -138,7 +139,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		}
 		r.Log.Info("Using Empty dir Deployment")
 		executeDeployment(r.Client, instance, false, r.Scheme)
-		if isPodRunning(r.Client, instance, 180) {
+		if isPodRunning(r.Client, instance, waitSecondsForPodChk) {
 			//Write Status
 			err := updateCR(r.Client, instance, "Node level persistence using EmptyDir")
 			if err != nil {

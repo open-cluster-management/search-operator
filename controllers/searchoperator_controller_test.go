@@ -26,7 +26,7 @@ func commonSetup() (*runtime.Scheme, reconcile.Request, *searchv1alpha1.SearchOp
 
 	searchv1alpha1.AddToScheme(testScheme)
 	testScheme.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.Secret{})
-
+	waitSecondsForPodChk = 5
 	testSearchOperator := &searchv1alpha1.SearchOperator{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: searchv1alpha1.GroupVersion.String(),
