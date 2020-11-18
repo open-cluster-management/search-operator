@@ -66,9 +66,8 @@ func Test_searchOperatorNotFound(t *testing.T) {
 	nilSearchOperator := SearchOperatorReconciler{client, log, testScheme}
 
 	_, err := nilSearchOperator.Reconcile(req)
-	if !assert.Nil(t, err) {
-		t.Error("Expected Nil. Got error: ", err.Error())
-	}
+	assert.Nil(t, err, "Expected Nil. Got error: %v", err)
+
 	instance := &searchv1alpha1.SearchOperator{}
 	err = client.Get(context.TODO(), req.NamespacedName, instance)
 	if !errors.IsNotFound(err) {
@@ -161,9 +160,8 @@ func Test_EmptyDirDeploymentDegradedTrue(t *testing.T) {
 
 	instance := &searchv1alpha1.SearchOperator{}
 	err = client.Get(context.TODO(), req.NamespacedName, instance)
-	if !assert.Nil(t, err) {
-		t.Error("Expected search Operator. Got ", err.Error())
-	}
+	assert.Nil(t, err, "Expected search Operator. Got error: %v", err)
+
 	//Set persistence to true in operator - this should cause degraged mode flag to turn on since we don't have PVC
 	instance.Spec.Persistence = true
 	err = client.Update(context.TODO(), instance)
@@ -172,9 +170,7 @@ func Test_EmptyDirDeploymentDegradedTrue(t *testing.T) {
 	_, err = nilSearchOperator.Reconcile(req)
 
 	err = client.Get(context.TODO(), req.NamespacedName, instance)
-	if !assert.Nil(t, err) {
-		t.Error("Expected search Operator. Got ", err.Error())
-	}
+	assert.Nil(t, err, "Expected search Operator. Got error: %v", err)
 
 	if !instance.Spec.Degraded {
 		t.Errorf("Expected search Operator to be operating in degraded mode. Found instance.Spec.Degraded:%v, Expected: true", instance.Spec.Degraded)
