@@ -1,18 +1,4 @@
-/*
-
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+// Copyright (c) 2020 Red Hat, Inc.
 
 package controllers
 
@@ -103,54 +89,60 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	}
 
 	// Setup RedisGraph Deployment
-	r.Log.Info(fmt.Sprintf("Config in Use Persistence/Degrade %v/%v", instance.Spec.Persistence, instance.Spec.Degraded))
-	if instance.Spec.Persistence && !instance.Spec.Degraded {
+	r.Log.Info(fmt.Sprintf("Config in Use Persistence/AllowDegrade %v/%v", instance.Spec.Persistence, instance.Spec.AllowDegradeMode))
+	if instance.Spec.Persistence {
+		//If running PVC deployment nothing to do
 		if podScheduled(r.Client, instance, 1) && instance.Status.PersistenceStatus == "Persistence using PersistenceVolumeClaim" {
+			return ctrl.Result{}, nil
+		}
+		//If running degraded deployment AND AllowDegradeMode is set
+		if isPodRunning(r.Client, instance, 1) && instance.Spec.AllowDegradeMode && instance.Status.PersistenceStatus == "Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim" {
 			return ctrl.Result{}, nil
 		}
 		setupVolume(r.Client, instance)
 		executeDeployment(r.Client, instance, true, r.Scheme)
+		podReady := podScheduled(r.Client, instance, 180)
 
-		//If Pod cannot be scheduled rollback to EmptyDir
-		if !podScheduled(r.Client, instance, 180) {
-			r.Log.Info("Degrading to  Empty dir Deployment")
+		if podReady {
 			//Write Status
-			err := updateCR(r.Client, instance, "Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim", true)
-			//re queue
-			if err != nil {
-				err = fmt.Errorf("Redisgraph Pod with PVC not running")
-			}
-			return ctrl.Result{}, err
-		} else {
-			//Write Status
-			err := updateCR(r.Client, instance, "Persistence using PersistenceVolumeClaim", false)
+			err := updateCR(r.Client, instance, "Redisgraph is using PersistenceVolumeClaim")
 			if err != nil {
 				return ctrl.Result{}, err
 			}
 		}
-	} else {
-		if !instance.Spec.Persistence && !instance.Spec.Degraded && isPodRunning(r.Client, instance) && instance.Status.PersistenceStatus == "Node level persistence using EmptyDir" {
-			return ctrl.Result{}, nil
+		//If Pod cannot be scheduled rollback to EmptyDir if AllowDegradeMode is set
+		if !podReady && instance.Spec.AllowDegradeMode {
+			r.Log.Info("Degrading Redisgraph deployment to use empty dir.")
+			executeDeployment(r.Client, instance, false, r.Scheme)
+			if isPodRunning(r.Client, instance, 180) {
+				//Write Status
+				err := updateCR(r.Client, instance, "Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim")
+				if err != nil {
+					return ctrl.Result{}, err
+				} else {
+					return ctrl.Result{}, nil
+				}
+			} else {
+				r.Log.Info("Unable to create Redisgraph Deployment in Degraded Mode")
+				return ctrl.Result{}, fmt.Errorf("Redisgraph Pod not running")
+			}
 		}
-		if instance.Spec.Degraded && isPodRunning(r.Client, instance) && instance.Status.PersistenceStatus == "Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim" {
+		if !podReady && !instance.Spec.AllowDegradeMode {
+			r.Log.Info("Unable to create Redisgraph Deployment using PVC ")
+			return ctrl.Result{}, fmt.Errorf("Redisgraph Pod not running")
+		}
+
+	} else {
+		if !instance.Spec.Persistence && isPodRunning(r.Client, instance, 1) && instance.Status.PersistenceStatus == "Node level persistence using EmptyDir" {
 			return ctrl.Result{}, nil
 		}
 		r.Log.Info("Using Empty dir Deployment")
 		executeDeployment(r.Client, instance, false, r.Scheme)
-
-		if isPodRunning(r.Client, instance) {
-			if instance.Spec.Degraded {
-				//Write Status
-				err := updateCR(r.Client, instance, "Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim", true)
-				if err != nil {
-					return ctrl.Result{}, err
-				}
-			} else {
-				//Write Status
-				err := updateCR(r.Client, instance, "Node level persistence using EmptyDir", false)
-				if err != nil {
-					return ctrl.Result{}, err
-				}
+		if isPodRunning(r.Client, instance, 180) {
+			//Write Status
+			err := updateCR(r.Client, instance, "Node level persistence using EmptyDir")
+			if err != nil {
+				return ctrl.Result{}, err
 			}
 		} else {
 			r.Log.Info("Unable to create Redisgraph Deployment")
@@ -174,7 +166,7 @@ func getDeployment(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.VolumeS
 
 	return &appv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "search-prod-redisgraph",
+			Name:      "search-redisgraph",
 			Namespace: cr.Namespace,
 			Annotations: map[string]string{
 				"owner": "search-operator",
@@ -203,7 +195,7 @@ func getDeployment(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.VolumeS
 					Containers: []v1.Container{
 						{
 							Name:  "redisgraph",
-							Image: cr.Spec.RedisgraphImage,
+							Image: cr.Spec.SearchImageOverrides.Redisgraph_TLS,
 							Env: []v1.EnvVar{
 								{
 									Name: "REDIS_PASSWORD",
@@ -252,7 +244,7 @@ func getDeployment(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.VolumeS
 							Name: "redis-graph-certs",
 							VolumeSource: v1.VolumeSource{
 								Secret: &v1.SecretVolumeSource{
-									SecretName: "search-prod-e5b24-redisgraph-secrets",
+									SecretName: "search-redisgraph-secrets",
 									Items: []v1.KeyToPath{
 										{
 											Key:  "ca.crt",
@@ -277,20 +269,12 @@ func getDeployment(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.VolumeS
 	}
 }
 
-func updateCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, status string, degrade bool) error {
+func updateCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, status string) error {
 	found := &searchv1alpha1.SearchOperator{}
 	err := kclient.Get(context.TODO(), types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace}, found)
 	if err != nil {
 		log.Error(err, fmt.Sprintf("Failed to get SearchOperator %s/%s ", cr.Namespace, cr.Name))
 		return err
-	}
-	if degrade {
-		cr.Spec.Degraded = degrade
-		err := kclient.Update(context.TODO(), cr)
-		if err != nil {
-			log.Error(err, fmt.Sprintf("Failed to update SearchOperator %s/%s  ", cr.Namespace, cr.Name))
-			return err
-		}
 	}
 	cr.Status.PersistenceStatus = status
 	err = kclient.Status().Update(context.TODO(), cr)
@@ -301,7 +285,7 @@ func updateCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, status s
 		log.Error(err, fmt.Sprintf("Failed to update %s/%s status ", cr.Namespace, cr.Name))
 		return err
 	} else {
-		log.Info(fmt.Sprintf("Updated CR status with degrade/persistence %v/%v  ", cr.Spec.Degraded, cr.Spec.Persistence))
+		log.Info(fmt.Sprintf("Updated CR status with persistence %s  ", cr.Status.PersistenceStatus))
 	}
 	return nil
 }
@@ -326,10 +310,10 @@ func updateRedisDeployment(client client.Client, deployment *appv1.Deployment, n
 			deployment.ObjectMeta.ResourceVersion = found.ObjectMeta.ResourceVersion
 			err = client.Update(context.TODO(), deployment)
 			if err != nil {
-				log.Error(err, "Failed to update  deployment")
+				log.Error(err, "Failed to update deployment")
 				return
 			}
-			log.Info("Peristence Volume %s Updated for  redisgraph deployment ")
+			log.Info("Peristence Volume  updated for redisgraph deployment ")
 		} else {
 			log.Info("No changes for redisgraph deployment ")
 		}
@@ -379,7 +363,7 @@ func setupVolume(client client.Client, cr *searchv1alpha1.SearchOperator) {
 		err = client.Create(context.TODO(), pvc)
 		//Return True if sucessfully created pvc else return False
 		if err != nil {
-			log.Info("Error Creating a new PVC ", "PVC.Namespace", cr.Namespace, "PVC.Name", pvcName)
+			log.Info("Error creating a new PVC ", "PVC.Namespace", cr.Namespace, "PVC.Name", pvcName)
 			log.Info(err.Error())
 			return
 		} else {
@@ -387,7 +371,7 @@ func setupVolume(client client.Client, cr *searchv1alpha1.SearchOperator) {
 			return
 		}
 	} else if err != nil {
-		log.Info("Error finding  PVC ", "PVC.Namespace", cr.Namespace, "PVC.Name", pvcName)
+		log.Info("Error finding ßPVC ", "PVC.Namespace", cr.Namespace, "PVC.Name", pvcName)
 		//return False and error if there is Error
 		return
 	}
@@ -427,11 +411,12 @@ func newRedisSecret(cr *searchv1alpha1.SearchOperator) *corev1.Secret {
 
 func podScheduled(kclient client.Client, cr *searchv1alpha1.SearchOperator, waitSeconds int) bool {
 	podList := &corev1.PodList{}
-	opts := []client.ListOption{client.MatchingLabels{"component": "redisgraph"}}
+	opts := []client.ListOption{client.MatchingLabels{"app": "search-prod", "component": "redisgraph"}}
 	//Check pod in 1 seconds
 	time.Sleep(1 * time.Second)
 	err := kclient.List(context.TODO(), podList, opts...)
 	if err != nil {
+		log.Info("Error listing redisgraph pods. ", err)
 		return false
 	}
 	//Keep checking status until waitSeconds
@@ -464,30 +449,39 @@ func podScheduled(kclient client.Client, cr *searchv1alpha1.SearchOperator, wait
 	return false
 }
 
-func isPodRunning(kclient client.Client, cr *searchv1alpha1.SearchOperator) bool {
+func isPodRunning(kclient client.Client, cr *searchv1alpha1.SearchOperator, waitSeconds int) bool {
 	podList := &corev1.PodList{}
 	opts := []client.ListOption{client.MatchingLabels{"component": "redisgraph"}}
+	//Check pod in 1 seconds
+	time.Sleep(1 * time.Second)
 	err := kclient.List(context.TODO(), podList, opts...)
 	if err != nil {
 		return false
 	}
-	for _, item := range podList.Items {
-		for _, status := range item.Status.Conditions {
-			if status.Reason == "Unschedulable" {
-				log.Info("RedisGraph Pod UnScheduleable ")
-				return false
+	//Keep checking status until waitSeconds
+	// We assume its not running
+	count := 0
+	for count < waitSeconds {
+		for _, item := range podList.Items {
+			for _, status := range item.Status.Conditions {
+				if status.Reason == "Unschedulable" {
+					log.Info("RedisGraph Pod UnScheduleable ")
+					return false
+				}
 			}
-		}
-		for _, status := range item.Status.ContainerStatuses {
-			if status.Ready {
-				for _, name := range item.Spec.Volumes {
-					if name.EmptyDir != nil {
-						log.Info("RedisGraph Pod  Ready")
-						return true
+			for _, status := range item.Status.ContainerStatuses {
+				if status.Ready {
+					for _, name := range item.Spec.Volumes {
+						if name.EmptyDir != nil {
+							log.Info("RedisGraph Pod  Ready")
+							return true
+						}
 					}
 				}
 			}
 		}
+		count++
+		time.Sleep(1 * time.Second)
 	}
 
 	return false

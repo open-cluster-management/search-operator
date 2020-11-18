@@ -36,43 +36,71 @@ spec:
         spec:
           description: SearchOperatorSpec defines the desired state of SearchOperator
           properties:
-            customlabelselector:
-              type: string
-            customlabelvalue:
-              type: string
-            degraded:
+            allowdegrademode:
               type: boolean
-            limit_cpu:
-              description: Limit CPU
-              type: string
-            limit_memory:
-              description: Limit Memory
-              type: string
             nodeselector:
-              type: boolean
-            nodeselectoros:
-              type: string
+              properties:
+                customlabelselector:
+                  type: string
+                customlabelvalue:
+                  type: string
+                enabled:
+                  type: boolean
+                os:
+                  type: string
+              required:
+              - enabled
+              type: object
             persistence:
               type: boolean
             pullpolicy:
               type: string
             pullsecret:
               type: string
-            redisgraph_image:
+            redisgraph_resource:
+              properties:
+                limit_cpu:
+                  description: Limit CPU
+                  type: string
+                limit_memory:
+                  description: Limit Memory
+                  type: string
+                request_cpu:
+                  description: Request CPU
+                  type: string
+                request_memory:
+                  description: Request memory
+                  type: string
+              required:
+              - limit_cpu
+              - limit_memory
+              - request_cpu
+              - request_memory
+              type: object
+            searchimageoverrides:
               description: Image to use in deployment
-              type: string
-            request_cpu:
-              description: Request CPU
-              type: string
-            request_memory:
-              description: Request memory
-              type: string
+              properties:
+                redisgraph_tls:
+                  type: string
+                search_aggregator:
+                  type: string
+                search_api:
+                  type: string
+                search_collector:
+                  type: string
+              required:
+              - redisgraph_tls
+              type: object
             storageclass:
               type: string
             storagesize:
               type: string
           required:
+          - allowdegrademode
           - persistence
+          - redisgraph_resource
+          - searchimageoverrides
+          - storagesize
           type: object
         status:
           description: SearchOperatorStatus defines the observed state of SearchOperator

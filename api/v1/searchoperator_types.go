@@ -30,32 +30,22 @@ type SearchOperatorSpec struct {
 
 	// +optional
 	StorageClass string `json:"storageclass,omitempty"`
-	// +optional
-	StorageSize string `json:"storagesize,omitempty"`
+
+	StorageSize string `json:"storagesize"`
 
 	Persistence bool `json:"persistence"`
 
-	// +optional
-	Degraded bool `json:"degraded,omitempty"`
+	AllowDegradeMode bool `json:"allowdegrademode"`
 	// Image to use in deployment
-	RedisgraphImage string `json:"redisgraph_image,omitempty"`
-	// Request memory
-	RequestMemory string `json:"request_memory,omitempty"`
-	// Request CPU
-	RequestCPU string `json:"request_cpu,omitempty"`
-	// Limit Memory
-	LimitMemory string `json:"limit_memory,omitempty"`
-	// Limit CPU
-	LimitCPU string `json:"limit_cpu,omitempty"`
+	SearchImageOverrides ImageOverrides `json:"searchimageoverrides"`
+
+	Redisgraph_Resource PodResource `json:"redisgraph_resource"`
 
 	PullPolicy string `json:"pullpolicy,omitempty"`
 
 	PullSecret string `json:"pullsecret,omitempty"`
 
-	NodeSelector        bool   `json:"nodeselector,omitempty"`
-	NodeSelectorOs      string `json:"nodeselectoros,omitempty"`
-	CustomLabelSelector string `json:"customlabelselector,omitempty"`
-	CustomLabelValue    string `json:"customlabelvalue,omitempty"`
+	SearchNodeSelector NodeSelector `json:"nodeselector,omitempty"`
 }
 
 // SearchOperatorStatus defines the observed state of SearchOperator
@@ -84,6 +74,31 @@ type SearchOperatorList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []SearchOperator `json:"items"`
+}
+
+type PodResource struct {
+	// Request memory
+	RequestMemory string `json:"request_memory"`
+	// Request CPU
+	RequestCPU string `json:"request_cpu"`
+	// Limit Memory
+	LimitMemory string `json:"limit_memory"`
+	// Limit CPU
+	LimitCPU string `json:"limit_cpu"`
+}
+
+type NodeSelector struct {
+	Enabled             bool   `json:"enabled"`
+	OS                  string `json:"os,omitempty"`
+	CustomLabelSelector string `json:"customlabelselector,omitempty"`
+	CustomLabelValue    string `json:"customlabelvalue,omitempty"`
+}
+
+type ImageOverrides struct {
+	Redisgraph_TLS    string `json:"redisgraph_tls"`
+	Search_Aggregator string `json:"search_aggregator,omitempty"`
+	Search_API        string `json:"search_api,omitempty"`
+	Search_Collector  string `json:"search_collector,omitempty"`
 }
 
 func init() {
