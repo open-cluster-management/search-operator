@@ -47,9 +47,12 @@ var (
 	log                  = logf.Log.WithName("searchoperator")
 )
 
-// +kubebuilder:rbac:groups=search.open-cluster-management.io,resources=searchoperators,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=search.open-cluster-management.io,resources=searchoperators/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=search.open-cluster-management.io,resources=searchoperators,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=search.open-cluster-management.io,resources=searchoperators,
+//verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=search.open-cluster-management.io,resources=searchoperators/status,
+//verbs=get;update;patch
+// +kubebuilder:rbac:groups=search.open-cluster-management.io,resources=searchoperators,
+//verbs=get;list;watch;create;update;patch;delete
 
 func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
@@ -106,7 +109,8 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			return ctrl.Result{}, nil
 		}
 		//If running degraded deployment AND AllowDegradeMode is set
-		if isPodRunning(r.Client, instance, false, 1) && allowdegrade && persistenceStatus == "Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim" {
+		if isPodRunning(r.Client, instance, false, 1) && allowdegrade &&
+			persistenceStatus == "Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim" {
 			return ctrl.Result{}, nil
 		}
 		setupVolume(r.Client, instance)
@@ -141,7 +145,8 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			return ctrl.Result{}, fmt.Errorf(redisNotRunning)
 		}
 	} else {
-		if !persistence && isPodRunning(r.Client, instance, false, 1) && persistenceStatus == "Node level persistence using EmptyDir" {
+		if !persistence && isPodRunning(r.Client, instance, false, 1) &&
+			persistenceStatus == "Node level persistence using EmptyDir" {
 			return ctrl.Result{}, nil
 		}
 		r.Log.Info("Using Empty dir Deployment")
