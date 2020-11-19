@@ -464,7 +464,7 @@ func isReady(pod v1.Pod, withPVC bool) bool {
 
 func executeDeployment(client client.Client, cr *searchv1alpha1.SearchOperator, usePVC bool,
 	scheme *runtime.Scheme) *appv1.StatefulSet {
-	var deployment *appv1.StatefulSet
+	var statefulSet *appv1.StatefulSet
 	emptyDirVolume := v1.VolumeSource{
 		EmptyDir: &v1.EmptyDirVolumeSource{},
 	}
