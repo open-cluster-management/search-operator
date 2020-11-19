@@ -47,12 +47,9 @@ var (
 	log                  = logf.Log.WithName("searchoperator")
 )
 
-// +kubebuilder:rbac:groups=search.open-cluster-management.io,resources=searchoperators,
-//verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=search.open-cluster-management.io,resources=searchoperators/status,
-//verbs=get;update;patch
-// +kubebuilder:rbac:groups=search.open-cluster-management.io,resources=searchoperators,
-//verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=search.open-cluster-management.io,resources=searchoperators,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=search.open-cluster-management.io,resources=searchoperators/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=search.open-cluster-management.io,resources=searchoperators,verbs=get;list;watch;create;update;patch;delete
 
 func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
