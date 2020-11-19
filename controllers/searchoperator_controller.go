@@ -446,29 +446,18 @@ func isReady(pod v1.Pod, withPVC bool) bool {
 			return false
 		}
 	}
-	if withPVC {
-		for _, status := range pod.Status.ContainerStatuses {
-			if status.Ready {
-				for _, name := range pod.Spec.Volumes {
-					if name.PersistentVolumeClaim != nil && name.PersistentVolumeClaim.ClaimName == pvcName {
+	for _, status := range pod.Status.ContainerStatuses {
+		if status.Ready {
+			for _, name := range pod.Spec.Volumes {
+				if withPVC && name.PersistentVolumeClaim != nil && name.PersistentVolumeClaim.ClaimName == pvcName {
 						log.Info("RedisGraph Pod With PVC Ready")
 						return true
-					}
-				}
-			}
-		}
-	} else {
-		for _, status := range pod.Status.ContainerStatuses {
-			if status.Ready {
-				for _, name := range pod.Spec.Volumes {
-					if name.EmptyDir != nil {
-						log.Info("RedisGraph Pod  Ready")
+				} else if !withPVC && name.EmptyDir != nil {
+						log.Info("RedisGraph Pod Ready")
 						return true
-					}
 				}
 			}
 		}
-
 	}
 	return false
 }
