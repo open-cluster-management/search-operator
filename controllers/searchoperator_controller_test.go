@@ -87,7 +87,7 @@ func Test_secretCreatedWithOwnerRef(t *testing.T) {
 	assert.Equal(t, testSecret.Name, found.Name, "Secret is created with expected name.")
 	assert.Equal(t, testSecret.Namespace, found.Namespace, "Secret is created in expected namespace.")
 	assert.EqualValues(t, testSecret.GetLabels(), found.GetLabels(), "Secret is created with expected labels.")
-	ownerRefArray := found.GetOwnerReferences()
+
 	ownerRefArray := found.GetOwnerReferences()
 	assert.NotNil(t, ownerRefArray, "Created secret should have an ownerReference.")
 	assert.Len(t, ownerRefArray, 1, "Created secret should have an ownerReference.")
