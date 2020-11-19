@@ -450,11 +450,11 @@ func isReady(pod v1.Pod, withPVC bool) bool {
 		if status.Ready {
 			for _, name := range pod.Spec.Volumes {
 				if withPVC && name.PersistentVolumeClaim != nil && name.PersistentVolumeClaim.ClaimName == pvcName {
-						log.Info("RedisGraph Pod With PVC Ready")
-						return true
+					log.Info("RedisGraph Pod With PVC Ready")
+					return true
 				} else if !withPVC && name.EmptyDir != nil {
-						log.Info("RedisGraph Pod Ready")
-						return true
+					log.Info("RedisGraph Pod Ready")
+					return true
 				}
 			}
 		}
@@ -474,13 +474,13 @@ func executeDeployment(client client.Client, cr *searchv1alpha1.SearchOperator, 
 		},
 	}
 	if !usePVC {
-		deployment = getDeployment(cr, emptyDirVolume)
+		statefulSet = getDeployment(cr, emptyDirVolume)
 	} else {
-		deployment = getDeployment(cr, pvcVolume)
+		statefulSet = getDeployment(cr, pvcVolume)
 	}
-	if err := controllerutil.SetControllerReference(cr, deployment, scheme); err != nil {
-		log.Info("Cannot set deployment OwnerReference", err.Error())
+	if err := controllerutil.SetControllerReference(cr, statefulSet, scheme); err != nil {
+		log.Info("Cannot set statefulSet OwnerReference", err.Error())
 	}
-	updateRedisDeployment(client, deployment, cr.Namespace)
-	return deployment
+	updateRedisDeployment(client, statefulSet, cr.Namespace)
+	return statefulSet
 }
