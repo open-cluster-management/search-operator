@@ -35,21 +35,20 @@ type SearchOperatorReconciler struct {
 }
 
 const (
-	pvcName         = "redisgraph-pvc"
-	appName         = "search"
-	component       = "redisgraph"
-	statefulSetName = "search-redisgraph"
-	redisNotRunning = "Redisgraph Pod not running"
+	pvcName                 = "redisgraph-pvc"
+	appName                 = "search"
+	component               = "redisgraph"
+	statefulSetName         = "search-redisgraph"
+	redisNotRunning         = "Redisgraph Pod not running"
+	statusUsingPVC          = "Redisgraph is using PersistenceVolumeClaim"
+	statusDegradedEmptyDir  = "Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim"
+	statusUsingNodeEmptyDir = "Node level persistence using EmptyDir"
 )
 
 var (
 	waitSecondsForPodChk = 180 //Wait for 3 minutes
 	log                  = logf.Log.WithName("searchoperator")
 )
-
-// +kubebuilder:rbac:groups=search.open-cluster-management.io,resources=searchoperators,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=search.open-cluster-management.io,resources=searchoperators/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=search.open-cluster-management.io,resources=searchoperators,verbs=get;list;watch;create;update;patch;delete
 
 func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
@@ -102,12 +101,12 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	r.Log.Info(fmt.Sprintf("Config in Use Persistence/AllowDegrade %v/%v", persistence, allowdegrade))
 	if persistence {
 		//If running PVC deployment nothing to do
-		if isPodRunning(r.Client, instance, true, 1) && persistenceStatus == "Persistence using PersistenceVolumeClaim" {
+		if isPodRunning(r.Client, instance, true, 1) && persistenceStatus == statusUsingPVC {
 			return ctrl.Result{}, nil
 		}
 		//If running degraded deployment AND AllowDegradeMode is set
 		if isPodRunning(r.Client, instance, false, 1) && allowdegrade &&
-			persistenceStatus == "Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim" {
+			persistenceStatus == statusDegradedEmptyDir {
 			return ctrl.Result{}, nil
 		}
 		setupVolume(r.Client, instance)
@@ -115,7 +114,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		podReady := isPodRunning(r.Client, instance, true, waitSecondsForPodChk)
 		if podReady {
 			//Write Status
-			err := updateCR(r.Client, instance, "Redisgraph is using PersistenceVolumeClaim")
+			err := updateCR(r.Client, instance, statusUsingPVC)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
@@ -126,7 +125,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			executeDeployment(r.Client, instance, false, r.Scheme)
 			if isPodRunning(r.Client, instance, false, waitSecondsForPodChk) {
 				//Write Status
-				err := updateCR(r.Client, instance, "Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim")
+				err := updateCR(r.Client, instance, statusDegradedEmptyDir)
 				if err != nil {
 					return ctrl.Result{}, err
 				} else {
@@ -143,14 +142,14 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		}
 	} else {
 		if !persistence && isPodRunning(r.Client, instance, false, 1) &&
-			persistenceStatus == "Node level persistence using EmptyDir" {
+			persistenceStatus == statusUsingNodeEmptyDir {
 			return ctrl.Result{}, nil
 		}
 		r.Log.Info("Using Empty dir Deployment")
 		executeDeployment(r.Client, instance, false, r.Scheme)
 		if isPodRunning(r.Client, instance, false, waitSecondsForPodChk) {
 			//Write Status
-			err := updateCR(r.Client, instance, "Node level persistence using EmptyDir")
+			err := updateCR(r.Client, instance, statusUsingNodeEmptyDir)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
@@ -171,7 +170,7 @@ func (r *SearchOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func int32Ptr(i int32) *int32 { return &i }
 
-func getDeployment(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.VolumeSource) *appv1.StatefulSet {
+func getStatefulSet(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.VolumeSource) *appv1.StatefulSet {
 
 	return &appv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -299,7 +298,7 @@ func updateCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, status s
 	return nil
 }
 
-func updateRedisDeployment(client client.Client, deployment *appv1.StatefulSet, namespace string) {
+func updateRedisStatefulSet(client client.Client, deployment *appv1.StatefulSet, namespace string) {
 	found := &appv1.StatefulSet{}
 	err := client.Get(context.TODO(), types.NamespacedName{Name: statefulSetName, Namespace: namespace}, found)
 	if err != nil {
@@ -433,7 +432,9 @@ func isPodRunning(kclient client.Client, cr *searchv1alpha1.SearchOperator, with
 	count := 0
 	for count < waitSeconds {
 		for _, item := range podList.Items {
-			isReady(item, withPVC)
+			if isReady(item, withPVC) {
+				return true
+			}
 		}
 		count++
 		time.Sleep(1 * time.Second)
@@ -476,13 +477,13 @@ func executeDeployment(client client.Client, cr *searchv1alpha1.SearchOperator, 
 		},
 	}
 	if !usePVC {
-		statefulSet = getDeployment(cr, emptyDirVolume)
+		statefulSet = getStatefulSet(cr, emptyDirVolume)
 	} else {
-		statefulSet = getDeployment(cr, pvcVolume)
+		statefulSet = getStatefulSet(cr, pvcVolume)
 	}
 	if err := controllerutil.SetControllerReference(cr, statefulSet, scheme); err != nil {
 		log.Info("Cannot set statefulSet OwnerReference", err.Error())
 	}
-	updateRedisDeployment(client, statefulSet, cr.Namespace)
+	updateRedisStatefulSet(client, statefulSet, cr.Namespace)
 	return statefulSet
 }

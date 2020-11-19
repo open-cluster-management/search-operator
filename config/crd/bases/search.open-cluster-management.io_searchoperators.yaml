@@ -37,6 +37,9 @@ spec:
           description: SearchOperatorSpec defines the desired state of SearchOperator
           properties:
             allowdegrademode:
+              description: If true, then whenever PVC cannot be Bound to search-redisgraph
+                pod then controller automatically sets up EmptyDir volume for search-redisgraph
+                persistence
               type: boolean
             nodeselector:
               properties:
@@ -52,6 +55,8 @@ spec:
               - enabled
               type: object
             persistence:
+              description: If true, then PVC configuration is used for search-redisgraph
+                pod
               type: boolean
             pullpolicy:
               type: string
@@ -92,8 +97,12 @@ spec:
               - redisgraph_tls
               type: object
             storageclass:
+              description: If specified this storage class is used , else default
+                storage class will be used by kubernetes
               type: string
             storagesize:
+              description: Size of the PVC storageclass which will be used by search-redisgraph
+                for persistence
               type: string
           required:
           - allowdegrademode
@@ -110,6 +119,7 @@ spec:
                 of cluster Important: Run "make" to regenerate code after modifying
                 this file'
               type: string
+              pattern: "[0-9]*(Mi|Gi)"
           required:
           - persistence
           type: object
