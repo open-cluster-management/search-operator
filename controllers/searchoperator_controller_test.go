@@ -70,9 +70,7 @@ func Test_searchOperatorNotFound(t *testing.T) {
 
 	instance := &searchv1alpha1.SearchOperator{}
 	err = client.Get(context.TODO(), req.NamespacedName, instance)
-	if !errors.IsNotFound(err) {
-		t.Error("Expected Not Found error. Got ", err.Error())
-	}
+	assert.True(t, errors.IsNotFound(err), "Expected Not Found error. Got %v", err.Error())
 }
 
 func Test_secretCreatedWithOwnerRef(t *testing.T) {
@@ -85,21 +83,20 @@ func Test_secretCreatedWithOwnerRef(t *testing.T) {
 
 	found := &corev1.Secret{}
 	err = client.Get(context.TODO(), types.NamespacedName{Name: testSecret.Name, Namespace: testSecret.Namespace}, found)
-	if err != nil {
-		t.Error("Expected secret to be created. Got error: ", err.Error())
-	}
-	if found.Name != testSecret.Name || found.Namespace != testSecret.Namespace || !reflect.DeepEqual(found.GetLabels(), testSecret.GetLabels()) {
-		t.Errorf("Found secret = %v/%v/%v, Expected =  %v/%v/%v", found.Name, found.Namespace, found.GetLabels(), testSecret.Name, testSecret.Namespace, testSecret.GetLabels())
-	}
+	assert.Nil(t, err, "Expected secret to be created. Got error: %v", err)
+	assert.Equal(t, testSecret.Name, found.Name, "Secret is created with expected name.")
+	assert.Equal(t, testSecret.Namespace, found.Namespace, "Secret is created in expected namespace.")
+	assert.EqualValues(t, testSecret.GetLabels(), found.GetLabels(), "Secret is created with expected labels.")
 	ownerRefArray := found.GetOwnerReferences()
-	if ownerRefArray == nil {
-		t.Error("Secret does not have ownerReference set")
-	} else {
-		ownerRef := ownerRefArray[0]
-		if ownerRef.APIVersion != searchOperator.APIVersion || ownerRef.Kind != searchOperator.Kind || ownerRef.Name != searchOperator.Name {
-			t.Errorf("Secret does not have correct ownerReference set. Owner should be searchOperator. Found %v/%v/%v. Expected %v/%v/%v", ownerRef.APIVersion, ownerRef.Kind, ownerRef.Name, searchOperator.APIVersion, searchOperator.Kind, searchOperator.Name)
-		}
-	}
+	ownerRefArray := found.GetOwnerReferences()
+	assert.NotNil(t, ownerRefArray, "Created secret should have an ownerReference.")
+	assert.Len(t, ownerRefArray, 1, "Created secret should have an ownerReference.")
+
+	ownerRef := ownerRefArray[0]
+	assert.Equal(t, searchOperator.APIVersion, ownerRef.APIVersion, "ownerRef has expected APIVersion.")
+	assert.Equal(t, searchOperator.Kind, ownerRef.Kind, "ownerRef has expected Kind.")
+	assert.Equal(t, searchOperator.Name, ownerRef.Name, "ownerRef has expected Name.")
+
 }
 
 func Test_secretAlreadyExists(t *testing.T) {
