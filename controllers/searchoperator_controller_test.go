@@ -52,6 +52,7 @@ func commonSetup() testSetup {
 			Persistence:      false,
 			AllowDegradeMode: true,
 			StorageSize:      "1M",
+			StorageClass:     "gp2",
 		},
 	}
 	testSecret := newRedisSecret(testSearchOperator)
