@@ -11,6 +11,7 @@ import (
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -19,12 +20,25 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-func commonSetup() (*runtime.Scheme, reconcile.Request, *searchv1alpha1.SearchOperator, *corev1.Secret, *appv1.StatefulSet) {
+type testSetup struct {
+	scheme                *runtime.Scheme
+	request               reconcile.Request
+	srchOperator          *searchv1alpha1.SearchOperator
+	secret                *corev1.Secret
+	statefulsetWithPVC    *appv1.StatefulSet
+	statefulsetWithOutPVC *appv1.StatefulSet
+	pvc                   *corev1.PersistentVolumeClaim
+	podWithPVC            *corev1.Pod
+	podWithOutPVC         *corev1.Pod
+}
+
+func commonSetup() testSetup {
 	testScheme := scheme.Scheme
 
+	namespace := "test-cluster"
 	searchv1alpha1.AddToScheme(testScheme)
 	testScheme.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.Secret{})
-	waitSecondsForPodChk = 5
+	waitSecondsForPodChk = 2
 	testSearchOperator := &searchv1alpha1.SearchOperator{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: searchv1alpha1.GroupVersion.String(),
@@ -32,7 +46,7 @@ func commonSetup() (*runtime.Scheme, reconcile.Request, *searchv1alpha1.SearchOp
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test-cluster",
-			Namespace: "test-cluster",
+			Namespace: namespace,
 		},
 		Spec: searchv1alpha1.SearchOperatorSpec{
 			Persistence:      false,
@@ -44,22 +58,36 @@ func commonSetup() (*runtime.Scheme, reconcile.Request, *searchv1alpha1.SearchOp
 	req := reconcile.Request{
 		NamespacedName: types.NamespacedName{
 			Name:      "test-cluster",
-			Namespace: "test-cluster",
+			Namespace: namespace,
 		},
 	}
 
 	client := fake.NewFakeClientWithScheme(testScheme)
-	testStatefulset := executeDeployment(client, testSearchOperator, false, testScheme)
-	return testScheme, req, testSearchOperator, testSecret, testStatefulset
+	testStatefulsetWithPVC := executeDeployment(client, testSearchOperator, true, testScheme)
+	testStatefulsetWithOutPVC := executeDeployment(client, testSearchOperator, false, testScheme)
+
+	fakePVC := createFakeNamedPVC(testSearchOperator.Spec.StorageSize, testSearchOperator.Namespace, nil)
+	fakePodWithPVC := createFakeRedisGraphPod(namespace, true)
+	fakePodWithOutPVC := createFakeRedisGraphPod(namespace, false)
+
+	testSetup := testSetup{scheme: testScheme,
+		request:               req,
+		srchOperator:          testSearchOperator,
+		secret:                testSecret,
+		statefulsetWithPVC:    testStatefulsetWithPVC,
+		statefulsetWithOutPVC: testStatefulsetWithOutPVC,
+		pvc:                   fakePVC,
+		podWithPVC:            fakePodWithPVC,
+		podWithOutPVC:         fakePodWithOutPVC}
+
+	return testSetup
 }
 
 func Test_searchOperatorNotFound(t *testing.T) {
-	testScheme, req, _, _, _ := commonSetup()
-
-	client := fake.NewFakeClientWithScheme(testScheme)
-	// log = logf.Log.WithName("searchoperator")
-
-	nilSearchOperator := SearchOperatorReconciler{client, log, testScheme}
+	testSetup := commonSetup()
+	req := testSetup.request
+	client := fake.NewFakeClientWithScheme(testSetup.scheme)
+	nilSearchOperator := SearchOperatorReconciler{client, log, testSetup.scheme}
 
 	_, err := nilSearchOperator.Reconcile(req)
 	assert.Nil(t, err, "Expected Nil. Got error: %v", err)
@@ -70,12 +98,12 @@ func Test_searchOperatorNotFound(t *testing.T) {
 }
 
 func Test_secretCreatedWithOwnerRef(t *testing.T) {
-	testScheme, req, searchOperator, testSecret, _ := commonSetup()
+	testSetup := commonSetup()
+	testSecret := testSetup.secret
+	client := fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator)
+	nilSearchOperator := SearchOperatorReconciler{client, log, testSetup.scheme}
 
-	client := fake.NewFakeClientWithScheme(testScheme, searchOperator)
-	nilSearchOperator := SearchOperatorReconciler{client, log, testScheme}
-
-	_, err := nilSearchOperator.Reconcile(req)
+	_, err := nilSearchOperator.Reconcile(testSetup.request)
 
 	found := &corev1.Secret{}
 	err = client.Get(context.TODO(), types.NamespacedName{Name: testSecret.Name, Namespace: testSecret.Namespace}, found)
@@ -88,19 +116,20 @@ func Test_secretCreatedWithOwnerRef(t *testing.T) {
 	assert.Len(t, ownerRefArray, 1, "Created secret should have an ownerReference.")
 
 	ownerRef := ownerRefArray[0]
-	assert.Equal(t, searchOperator.APIVersion, ownerRef.APIVersion, "ownerRef has expected APIVersion.")
-	assert.Equal(t, searchOperator.Kind, ownerRef.Kind, "ownerRef has expected Kind.")
-	assert.Equal(t, searchOperator.Name, ownerRef.Name, "ownerRef has expected Name.")
+	assert.Equal(t, testSetup.srchOperator.APIVersion, ownerRef.APIVersion, "ownerRef has expected APIVersion.")
+	assert.Equal(t, testSetup.srchOperator.Kind, ownerRef.Kind, "ownerRef has expected Kind.")
+	assert.Equal(t, testSetup.srchOperator.Name, ownerRef.Name, "ownerRef has expected Name.")
 
 }
 
 func Test_secretAlreadyExists(t *testing.T) {
-	testScheme, req, searchOperator, testSecret, _ := commonSetup()
+	testSetup := commonSetup()
+	testSecret := testSetup.secret
 
-	client := fake.NewFakeClientWithScheme(testScheme, searchOperator, testSecret)
-	nilSearchOperator := SearchOperatorReconciler{client, log, testScheme}
+	client := fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, testSecret)
+	nilSearchOperator := SearchOperatorReconciler{client, log, testSetup.scheme}
 
-	_, err := nilSearchOperator.Reconcile(req)
+	_, err := nilSearchOperator.Reconcile(testSetup.request)
 
 	found := &corev1.Secret{}
 	err = client.Get(context.TODO(), types.NamespacedName{Name: testSecret.Name, Namespace: testSecret.Namespace}, found)
@@ -112,20 +141,20 @@ func Test_secretAlreadyExists(t *testing.T) {
 }
 
 func Test_EmptyDirStatefulsetCreatedWithOwnerRef(t *testing.T) {
-	testScheme, req, searchOperator, testSecret, testStatefulset := commonSetup()
+	testSetup := commonSetup()
 
-	client := fake.NewFakeClientWithScheme(testScheme, searchOperator, testSecret)
-	nilSearchOperator := SearchOperatorReconciler{client, log, testScheme}
+	client := fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, testSetup.secret)
+	nilSearchOperator := SearchOperatorReconciler{client, log, testSetup.scheme}
 	var err error
 
-	_, err = nilSearchOperator.Reconcile(req)
+	_, err = nilSearchOperator.Reconcile(testSetup.request)
 
 	foundStatefulset := &appv1.StatefulSet{}
-	err = client.Get(context.TODO(), types.NamespacedName{Name: testStatefulset.Name, Namespace: testStatefulset.Namespace}, foundStatefulset)
+	err = client.Get(context.TODO(), types.NamespacedName{Name: testSetup.statefulsetWithOutPVC.Name, Namespace: testSetup.statefulsetWithOutPVC.Namespace}, foundStatefulset)
 	assert.Nil(t, err, "Expected statefulset to be created. Got error: %v", err)
 
-	assert.Equal(t, testStatefulset.Name, foundStatefulset.Name, "Statefulset is created with expected name.")
-	assert.Equal(t, testStatefulset.Namespace, foundStatefulset.Namespace, "Statefulset is created in expected namespace.")
+	assert.Equal(t, testSetup.statefulsetWithOutPVC.Name, foundStatefulset.Name, "Statefulset is created with expected name.")
+	assert.Equal(t, testSetup.statefulsetWithOutPVC.Namespace, foundStatefulset.Namespace, "Statefulset is created in expected namespace.")
 
 	ownerRefArray := foundStatefulset.GetOwnerReferences()
 
@@ -133,17 +162,19 @@ func Test_EmptyDirStatefulsetCreatedWithOwnerRef(t *testing.T) {
 	assert.Len(t, ownerRefArray, 1, "Created Statefulset should have an ownerReference.")
 
 	ownerRef := ownerRefArray[0]
-	assert.Equal(t, searchOperator.APIVersion, ownerRef.APIVersion, "ownerRef has expected APIVersion.")
-	assert.Equal(t, searchOperator.Kind, ownerRef.Kind, "ownerRef has expected Kind.")
-	assert.Equal(t, searchOperator.Name, ownerRef.Name, "ownerRef has expected Name.")
+	assert.Equal(t, testSetup.srchOperator.APIVersion, ownerRef.APIVersion, "ownerRef has expected APIVersion.")
+	assert.Equal(t, testSetup.srchOperator.Kind, ownerRef.Kind, "ownerRef has expected Kind.")
+	assert.Equal(t, testSetup.srchOperator.Name, ownerRef.Name, "ownerRef has expected Name.")
 }
 
-func Test_StatefulsetDegradedSuccess(t *testing.T) {
-	testScheme, req, searchOperator, testSecret, testStatefulset := commonSetup()
+func Test_StatefulsetWithPVC(t *testing.T) {
+	testSetup := commonSetup()
+	req := testSetup.request
+	testStatefulset := testSetup.statefulsetWithPVC
 
 	//TODO: Passing already existing secret doesn't set ownerRef - testSecret
-	client := fake.NewFakeClientWithScheme(testScheme, searchOperator, testSecret)
-	nilSearchOperator := SearchOperatorReconciler{client, log, testScheme}
+	client := fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, testSetup.secret, testSetup.pvc, testSetup.podWithPVC)
+	nilSearchOperator := SearchOperatorReconciler{client, log, testSetup.scheme}
 	var err error
 
 	instance := &searchv1alpha1.SearchOperator{}
@@ -168,5 +199,89 @@ func Test_StatefulsetDegradedSuccess(t *testing.T) {
 	assert.Equal(t, testStatefulset.Name, foundStatefulset.Name, "Statefulset is created with expected name.")
 	assert.Equal(t, testStatefulset.Namespace, foundStatefulset.Namespace, "Statefulset is created in expected namespace.")
 	assert.EqualValues(t, testStatefulset.Spec.Template.Spec, foundStatefulset.Spec.Template.Spec, "Statefulset is created with expected template spec.")
+	assert.Equal(t, statusUsingPVC, instance.Status.PersistenceStatus, "Search Operator updated with persistent status as expected.")
+
+}
+
+func Test_FallBacktoEmptyDirStatefulset(t *testing.T) {
+	testSetup := commonSetup()
+
+	req := testSetup.request
+	testStatefulset := testSetup.statefulsetWithOutPVC
+
+	//TODO: Passing already existing secret doesn't set ownerRef - testSecret
+	client := fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, testSetup.secret, testSetup.podWithOutPVC)
+	nilSearchOperator := SearchOperatorReconciler{client, log, testSetup.scheme}
+	var err error
+
+	instance := &searchv1alpha1.SearchOperator{}
+	err = client.Get(context.TODO(), req.NamespacedName, instance)
+	assert.Nil(t, err, "Expected search Operator to be created. Got error: %v", err)
+
+	//Set persistence to true in operator - this should cause statefulset to fall back to empty dir since we don't have PVC
+	instance.Spec.Persistence = true
+	err = client.Update(context.TODO(), instance)
+	err = client.Get(context.TODO(), req.NamespacedName, instance)
+
+	_, err = nilSearchOperator.Reconcile(req)
+
+	err = client.Get(context.TODO(), req.NamespacedName, instance)
+	assert.Nil(t, err, "Expected search Operator to be created. Got error: %v", err)
+
+	foundStatefulset := &appv1.StatefulSet{}
+	err = client.Get(context.TODO(), types.NamespacedName{Name: testStatefulset.Name, Namespace: testStatefulset.Namespace}, foundStatefulset)
+
+	assert.Nil(t, err, "Expected Statefulset to be created. Got error: %v", err)
+
+	assert.Equal(t, testStatefulset.Name, foundStatefulset.Name, "Statefulset is created with expected name.")
+	assert.Equal(t, testStatefulset.Namespace, foundStatefulset.Namespace, "Statefulset is created in expected namespace.")
+	assert.EqualValues(t, testStatefulset.Spec.Template.Spec, foundStatefulset.Spec.Template.Spec, "Statefulset is created with expected template spec.")
+	assert.Equal(t, statusDegradedEmptyDir, instance.Status.PersistenceStatus, "Search Operator updated with degraded status as expected.")
+}
+
+func createFakeNamedPVC(requestBytes string, namespace string, userAnnotations map[string]string) *corev1.PersistentVolumeClaim {
+	annotations := map[string]string{}
+	for k, v := range userAnnotations {
+		annotations[k] = v
+	}
+
+	return &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			UID:         "testid",
+			Name:        pvcName,
+			Namespace:   namespace,
+			Annotations: annotations,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			Selector: nil, // Provisioner doesn't support selector
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceName(corev1.ResourceStorage): resource.MustParse(requestBytes),
+				},
+			},
+		},
+	}
+}
+
+func createFakeRedisGraphPod(namespace string, persistence bool) *corev1.Pod {
+	labels := map[string]string{}
+	labels["app"] = appName
+	labels["component"] = component
+	image := "quay.io/open-cluster-management/search-operator:latest"
+	containerStatuses := []corev1.ContainerStatus{}
+	containerStatus := corev1.ContainerStatus{Ready: true}
+	containerStatuses = append(containerStatuses, containerStatus)
+	status := corev1.PodStatus{ContainerStatuses: containerStatuses}
+
+	persistentVolSource := corev1.PersistentVolumeClaimVolumeSource{ClaimName: pvcName}
+	emptyDirVolSource := corev1.EmptyDirVolumeSource{}
+	var volSource corev1.VolumeSource
+
+	if persistence {
+		volSource = corev1.VolumeSource{PersistentVolumeClaim: &persistentVolSource}
+		return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Labels: labels}, Spec: corev1.PodSpec{Volumes: []corev1.Volume{{Name: pvcName, VolumeSource: volSource}}, Containers: []corev1.Container{{Image: image}}}, Status: status}
+	}
+	volSource = corev1.VolumeSource{EmptyDir: &emptyDirVolSource}
+	return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Labels: labels}, Spec: corev1.PodSpec{Volumes: []corev1.Volume{{VolumeSource: volSource}}, Containers: []corev1.Container{{Image: image}}}, Status: status}
 
 }
