@@ -52,7 +52,6 @@ func commonSetup() testSetup {
 			Persistence:      false,
 			AllowDegradeMode: true,
 			StorageSize:      "1M",
-			StorageClass:     "gp2",
 		},
 	}
 	testSecret := newRedisSecret(testSearchOperator)
@@ -184,6 +183,7 @@ func Test_StatefulsetWithPVC(t *testing.T) {
 
 	//Set persistence to true in operator - this should cause statefulset to fall back to empty dir since we don't have PVC
 	instance.Spec.Persistence = true
+	instance.Spec.StorageClass = "gp2"
 	err = client.Update(context.TODO(), instance)
 	err = client.Get(context.TODO(), req.NamespacedName, instance)
 
