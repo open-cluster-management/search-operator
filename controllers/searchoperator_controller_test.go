@@ -319,6 +319,19 @@ func Test_UnschedulablePodWithDisAllowDegradedMode(t *testing.T) {
 	assert.Equal(t, "Redisgraph Pod not running", err.Error(), "Expected Redisgraph Pod not running error. Got %v", err)
 }
 
+func TestUpdateCR(t *testing.T) {
+	testSetup := commonSetup()
+	client := fake.NewFakeClientWithScheme(testSetup.scheme)
+	var err error
+
+	err = updateCR(client, testSetup.srchOperator, "status")
+	assert.True(t, errors.IsNotFound(err), "Expected Not Found error. Got %v", err.Error())
+
+	client = fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator)
+	err = updateCR(client, testSetup.srchOperator, "status")
+	assert.Nil(t, err, "Expected Nil. Got error: %v", err)
+}
+
 func createFakeNamedPVC(requestBytes string, namespace string, userAnnotations map[string]string) *corev1.PersistentVolumeClaim {
 	annotations := map[string]string{}
 	for k, v := range userAnnotations {
