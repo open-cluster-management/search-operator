@@ -122,6 +122,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		//If Pod cannot be scheduled rollback to EmptyDir if AllowDegradeMode is set
 		if !podReady && allowdegrade {
 			r.Log.Info("Degrading Redisgraph deployment to use empty dir.")
+			deleteRedisStatefulSet(r.Client, instance.Namespace)
 			executeDeployment(r.Client, instance, false, r.Scheme)
 			if isPodRunning(r.Client, instance, false, waitSecondsForPodChk) {
 				//Write Status
@@ -327,6 +328,20 @@ func updateRedisStatefulSet(client client.Client, deployment *appv1.StatefulSet,
 		}
 	}
 }
+func deleteRedisStatefulSet(client client.Client, namespace string) {
+	found := &appv1.StatefulSet{}
+	err := client.Get(context.TODO(), types.NamespacedName{Name: statefulSetName, Namespace: namespace}, found)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return
+		} else {
+			err = client.Delete(context.TODO(), found)
+			log.Error(err, "Failed to delete deployment")
+			return
+		}
+	}
+	return
+}
 
 func getPVC(cr *searchv1alpha1.SearchOperator) *v1.PersistentVolumeClaim {
 	if cr.Spec.StorageClass != "" {
@@ -450,9 +465,7 @@ func isReady(pod v1.Pod, withPVC bool) bool {
 			return false
 		}
 	}
-	log.Info("Checking Redisgraph Container", "name", pod.Name, "status", pod.Status.String())
 	for _, status := range pod.Status.ContainerStatuses {
-		log.Info(" Redisgraph Container", "Status", status.Ready)
 		if status.Ready {
 			for _, name := range pod.Spec.Volumes {
 				if withPVC && name.PersistentVolumeClaim != nil && name.PersistentVolumeClaim.ClaimName == pvcName {
