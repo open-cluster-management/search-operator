@@ -371,15 +371,15 @@ func setupVolume(client client.Client, cr *searchv1alpha1.SearchOperator) {
 		err = client.Create(context.TODO(), pvc)
 		//Return True if sucessfully created pvc else return False
 		if err != nil {
-			log.Info("Error creating a new PVC ", pvcName)
+			log.Info("Error creating a new PVC ", "PVC Name", pvcName)
 			log.Info(err.Error())
 			return
 		} else {
-			log.Info("Created a new PVC ", pvcName)
+			log.Info("Created a new PVC ", "PVC Name", pvcName)
 			return
 		}
 	} else if err != nil {
-		log.Info("Error finding PVC ", pvcName)
+		log.Info("Error finding PVC ", "PVC Name", pvcName)
 		//return False and error if there is Error
 		return
 	}
@@ -452,14 +452,16 @@ func isReady(pod v1.Pod, withPVC bool) bool {
 			return false
 		}
 	}
+	log.Info("Checking Redisgraph Container Status...")
 	for _, status := range pod.Status.ContainerStatuses {
+		log.Info(" Redisgraph Container", "Status", status.Ready)
 		if status.Ready {
 			for _, name := range pod.Spec.Volumes {
 				if withPVC && name.PersistentVolumeClaim != nil && name.PersistentVolumeClaim.ClaimName == pvcName {
-					log.Info("RedisGraph Pod With PVC Ready")
+					log.Info("RedisGraph Pod with PVC Ready")
 					return true
 				} else if !withPVC && name.EmptyDir != nil {
-					log.Info("RedisGraph Pod Ready")
+					log.Info("RedisGraph Pod with EmptyDir Ready")
 					return true
 				}
 			}
