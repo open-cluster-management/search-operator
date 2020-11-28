@@ -329,17 +329,18 @@ func updateRedisStatefulSet(client client.Client, deployment *appv1.StatefulSet,
 	}
 }
 func deleteRedisStatefulSet(client client.Client, namespace string) {
-	found := &appv1.StatefulSet{}
-	err := client.Get(context.TODO(), types.NamespacedName{Name: statefulSetName, Namespace: namespace}, found)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return
-		} else {
-			err = client.Delete(context.TODO(), found)
-			log.Error(err, "Failed to delete deployment")
-			return
-		}
+	statefulset := &appv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      statefulSetName,
+			Namespace: namespace,
+		},
 	}
+	err := client.Delete(context.TODO(), statefulset)
+	if err != nil && !errors.IsNotFound(err) {
+		log.Error(err, "Failed to delete search redisgraph statefulset", "name", statefulSetName)
+		return
+	}
+	log.Info("StatefulSet deleted", "name", statefulSetName)
 	return
 }
 
