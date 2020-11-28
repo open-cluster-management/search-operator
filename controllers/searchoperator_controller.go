@@ -419,19 +419,17 @@ func newRedisSecret(cr *searchv1alpha1.SearchOperator) *corev1.Secret {
 
 func isPodRunning(kclient client.Client, cr *searchv1alpha1.SearchOperator, withPVC bool, waitSeconds int) bool {
 	log.Info("Checking Redisgraph Pod Status...")
-	podList := &corev1.PodList{}
-	opts := []client.ListOption{client.MatchingLabels{"app": appName, "component": "redisgraph"}}
-	//Check pod in 1 seconds
-	time.Sleep(1 * time.Second)
-	err := kclient.List(context.TODO(), podList, opts...)
-	if err != nil {
-		log.Info("Error listing redisgraph pods. ", err)
-		return false
-	}
 	//Keep checking status until waitSeconds
 	// We assume its not running
 	count := 0
 	for count < waitSeconds {
+		podList := &corev1.PodList{}
+		opts := []client.ListOption{client.MatchingLabels{"app": appName, "component": "redisgraph"}}
+		err := kclient.List(context.TODO(), podList, opts...)
+		if err != nil {
+			log.Info("Error listing redisgraph pods. ", err)
+			return false
+		}
 		for _, item := range podList.Items {
 			if isReady(item, withPVC) {
 				log.Info("Redisgraph Pod Running...")
@@ -452,7 +450,7 @@ func isReady(pod v1.Pod, withPVC bool) bool {
 			return false
 		}
 	}
-	log.Info("Checking Redisgraph Container", "name", pod.Name, "status", pod.Status.String)
+	log.Info("Checking Redisgraph Container", "name", pod.Name, "status", pod.Status.String())
 	for _, status := range pod.Status.ContainerStatuses {
 		log.Info(" Redisgraph Container", "Status", status.Ready)
 		if status.Ready {
