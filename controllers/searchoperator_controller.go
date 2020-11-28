@@ -418,6 +418,7 @@ func newRedisSecret(cr *searchv1alpha1.SearchOperator) *corev1.Secret {
 }
 
 func isPodRunning(kclient client.Client, cr *searchv1alpha1.SearchOperator, withPVC bool, waitSeconds int) bool {
+	log.Info("Checking Redisgraph Pod Status...")
 	podList := &corev1.PodList{}
 	opts := []client.ListOption{client.MatchingLabels{"app": appName, "component": "redisgraph"}}
 	//Check pod in 1 seconds
@@ -433,12 +434,14 @@ func isPodRunning(kclient client.Client, cr *searchv1alpha1.SearchOperator, with
 	for count < waitSeconds {
 		for _, item := range podList.Items {
 			if isReady(item, withPVC) {
+				log.Info("Redisgraph Pod Running...")
 				return true
 			}
 		}
 		count++
 		time.Sleep(1 * time.Second)
 	}
+	log.Info("Redisgraph Pod not Running...")
 	return false
 }
 
