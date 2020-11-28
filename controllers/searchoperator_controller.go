@@ -452,7 +452,7 @@ func isReady(pod v1.Pod, withPVC bool) bool {
 			return false
 		}
 	}
-	log.Info("Checking Redisgraph Container Status...")
+	log.Info("Checking Redisgraph Container", "name", pod.Name, "status", pod.Status.String)
 	for _, status := range pod.Status.ContainerStatuses {
 		log.Info(" Redisgraph Container", "Status", status.Ready)
 		if status.Ready {
