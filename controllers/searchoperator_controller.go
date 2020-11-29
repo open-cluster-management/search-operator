@@ -340,6 +340,7 @@ func deleteRedisStatefulSet(client client.Client, namespace string) {
 		log.Error(err, "Failed to delete search redisgraph statefulset", "name", statefulSetName)
 		return
 	}
+	time.Sleep(1 * time.Second) //Sleep for a minute to avoid quick update of statefulset
 	log.Info("StatefulSet deleted", "name", statefulSetName)
 	return
 }
