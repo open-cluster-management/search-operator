@@ -20,7 +20,7 @@ spec:
         - --enable-leader-election
         command:
         - /manager  
-        image: quay.io/open-cluster-management/search-operator:2.2.0-PR21-66e33056fe5d618470d680d52073f8ad0c3034df
+        image: quay.io/open-cluster-management/search-operator:2.2.0-PR21-1079d9b3abb55e1a1f66ecb6be075d96754758af
         imagePullPolicy: IfNotPresent
         name: search-operator
         env:
