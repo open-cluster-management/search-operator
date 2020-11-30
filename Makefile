@@ -38,10 +38,10 @@ unit-tests:
 
 e2e-tests:
 	@echo "TODO: Run e2e-tests"
-	./cicd-scripts/copyright-check.sh
+	./cicd-scripts/run-e2e-tests.sh
 
 copyright-check:
-	./cicd-scripts/run-e2e-tests.sh
+	./cicd-scripts/copyright-check.sh
 
 all: manager
 
