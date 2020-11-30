@@ -120,9 +120,7 @@ spec:
           description: SearchOperatorStatus defines the observed state of SearchOperator
           properties:
             persistence:
-              description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
-                of cluster Important: Run "make" to regenerate code after modifying
-                this file'
+              description: 'Reflects the current status of the RedisGraph pod using a Persistence mode (PVC/EmptyDir/Degraded)'
               type: string
           required:
           - persistence

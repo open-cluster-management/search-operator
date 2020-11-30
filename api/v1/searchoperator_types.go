@@ -56,8 +56,7 @@ type SearchOperatorSpec struct {
 
 // SearchOperatorStatus defines the observed state of SearchOperator
 type SearchOperatorStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Reflects the current status of the RedisGraph pod using a Persistence mode (PVC/EmptyDir/Degraded)
 	PersistenceStatus string `json:"persistence"`
 }
 
@@ -90,7 +89,7 @@ type PodResource struct {
 	// Limit Memory
 	LimitMemory string `json:"limit_memory"`
 	// Limit CPU
-	LimitCPU string `json:"limit_cpu"`
+	LimitCPU string `json:"limit_cpu,omitempty"`
 }
 
 type NodeSelector struct {

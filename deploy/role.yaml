@@ -10,40 +10,10 @@ rules:
   - ""
   resources:
   - secrets
+  - services
   verbs:
   - create
   - list
-  - watch
-- apiGroups:
-  - apps
-  resources:
-  - '*'
-  verbs:
-  - get
-- apiGroups:
-  - apps
-  resources:
-  - statefulsets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - search.acm.com
-  - search.open-cluster-management.io
-  resources:
-  - '*'
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - ""
@@ -58,6 +28,40 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - configmaps
+  verbs:
+  - get
+  - create
+  - update
+  - watch 
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - replicasets
+  verbs:
+  - get
+- apiGroups:
+  - apps.open-cluster-management.io
+  resources:
+  - helmreleases
+  verbs:
+  - get
+- apiGroups:
+  - search.open-cluster-management.io
+  resources:
+  - '*'
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - persistentvolumeclaims
   verbs:
   - get
@@ -67,12 +71,14 @@ rules:
   - watch
   - delete
 - apiGroups:
-  - ""
+  - apps
   resources:
-  - configmaps
+  - statefulsets
   verbs:
-  - get
   - create
+  - delete
+  - get
+  - list
+  - patch
   - update
-  - watch  
-
+  - watch   

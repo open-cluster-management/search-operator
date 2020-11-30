@@ -15,7 +15,5 @@ spec:
   pullsecret: multiclusterhub-operator-pull-secret
   searchimageoverrides:
     redisgraph_tls: quay.io/open-cluster-management/redisgraph-tls:2.2.0-PR30-338256dd6806b528e39a76552379da9c3f939b9a
-  request_cpu: 25m
-  request_memory: 64Mi
-  storagesize: 8Gi
+  storagesize: 10Gi
 
