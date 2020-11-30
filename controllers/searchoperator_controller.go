@@ -178,7 +178,6 @@ func int32Ptr(i int32) *int32 { return &i }
 
 func getStatefulSet(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.VolumeSource) *appv1.StatefulSet {
 	bool := false
-	intVal := int64(0)
 	return &appv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      statefulSetName,
@@ -236,7 +235,7 @@ func getStatefulSet(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.Volume
 								FailureThreshold:    3,
 								Handler: v1.Handler{
 									TCPSocket: &v1.TCPSocketAction{
-										Port: intstr.FromString("6380"),
+										Port: intstr.FromInt(6380),
 									},
 								},
 							},
@@ -248,7 +247,7 @@ func getStatefulSet(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.Volume
 								FailureThreshold:    3,
 								Handler: v1.Handler{
 									TCPSocket: &v1.TCPSocketAction{
-										Port: intstr.FromString("6380"),
+										Port: intstr.FromInt(6380),
 									},
 								},
 							},
@@ -266,7 +265,6 @@ func getStatefulSet(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.Volume
 							SecurityContext: &v1.SecurityContext{
 								Privileged:               &bool,
 								AllowPrivilegeEscalation: &bool,
-								RunAsUser:                &intVal,
 							},
 							VolumeMounts: []v1.VolumeMount{
 								{
