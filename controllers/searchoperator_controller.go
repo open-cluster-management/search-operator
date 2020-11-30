@@ -124,7 +124,10 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		//If Pod cannot be scheduled rollback to EmptyDir if AllowDegradeMode is set
 		if !podReady && allowdegrade {
 			r.Log.Info("Degrading Redisgraph deployment to use empty dir.")
-			deleteRedisStatefulSet(r.Client, instance.Namespace)
+			err := deleteRedisStatefulSet(r.Client, instance.Namespace)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
 			executeDeployment(r.Client, instance, false, r.Scheme)
 			if isPodRunning(r.Client, instance, false, waitSecondsForPodChk) {
 				//Write Status
@@ -371,7 +374,7 @@ func updateRedisStatefulSet(client client.Client, deployment *appv1.StatefulSet,
 		}
 	}
 }
-func deleteRedisStatefulSet(client client.Client, namespace string) {
+func deleteRedisStatefulSet(client client.Client, namespace string) error {
 	statefulset := &appv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      statefulSetName,
@@ -381,11 +384,11 @@ func deleteRedisStatefulSet(client client.Client, namespace string) {
 	err := client.Delete(context.TODO(), statefulset)
 	if err != nil && !errors.IsNotFound(err) {
 		log.Error(err, "Failed to delete search redisgraph statefulset", "name", statefulSetName)
-		return
+		return err
 	}
 	time.Sleep(1 * time.Second) //Sleep for a minute to avoid quick update of statefulset
 	log.Info("StatefulSet deleted", "name", statefulSetName)
-	return
+	return nil
 }
 
 func getPVC(cr *searchv1alpha1.SearchOperator) *v1.PersistentVolumeClaim {
