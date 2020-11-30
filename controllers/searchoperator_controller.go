@@ -428,19 +428,20 @@ func setupVolume(client client.Client, cr *searchv1alpha1.SearchOperator) {
 	found := &v1.PersistentVolumeClaim{}
 	pvc := getPVC(cr)
 	err := client.Get(context.TODO(), types.NamespacedName{Name: pvcName, Namespace: cr.Namespace}, found)
+	logKeyPVCName := "PVC Name"
 	if err != nil && errors.IsNotFound(err) {
 		err = client.Create(context.TODO(), pvc)
 		//Return True if sucessfully created pvc else return False
 		if err != nil {
-			log.Info("Error creating a new PVC ", "PVC Name", pvcName)
+			log.Info("Error creating a new PVC ", logKeyPVCName, pvcName)
 			log.Info(err.Error())
 			return
 		} else {
-			log.Info("Created a new PVC ", "PVC Name", pvcName)
+			log.Info("Created a new PVC ", logKeyPVCName, pvcName)
 			return
 		}
 	} else if err != nil {
-		log.Info("Error finding PVC ", "PVC Name", pvcName)
+		log.Info("Error finding PVC ", logKeyPVCName, pvcName)
 		//return False and error if there is Error
 		return
 	}
