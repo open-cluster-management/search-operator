@@ -40,6 +40,12 @@ func commonSetup() testSetup {
 	searchv1alpha1.AddToScheme(testScheme)
 	testScheme.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.Secret{})
 	waitSecondsForPodChk = 2
+	redisPodResource := searchv1alpha1.PodResource{
+		RequestMemory: "64Mi",
+		RequestCPU:    "25m",
+		LimitMemory:   "1Gi",
+		LimitCPU:      "250m",
+	}
 	testSearchOperator := &searchv1alpha1.SearchOperator{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: searchv1alpha1.GroupVersion.String(),
@@ -50,9 +56,10 @@ func commonSetup() testSetup {
 			Namespace: namespace,
 		},
 		Spec: searchv1alpha1.SearchOperatorSpec{
-			Persistence:      false,
-			AllowDegradeMode: true,
-			StorageSize:      "1M",
+			Persistence:         false,
+			AllowDegradeMode:    true,
+			StorageSize:         "1M",
+			Redisgraph_Resource: redisPodResource,
 		},
 	}
 	testSecret := newRedisSecret(testSearchOperator)
