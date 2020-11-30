@@ -32,12 +32,12 @@ else
 endif
 
 unit-tests:
-	@echo "TODO: Run unit-tests"
+	@echo "Run unit-tests"
 	go test ./... -v -coverprofile cover.out
 	go tool cover -html=cover.out -o=cover.html
 
 e2e-tests:
-	@echo "TODO: Run e2e-tests"
+	@echo "Run e2e-tests"
 	./cicd-scripts/run-e2e-tests.sh
 
 copyright-check:

@@ -67,19 +67,19 @@ spec:
                 limit_cpu:
                   description: Limit CPU
                   type: string
-                  pattern: "[0-9]*m"
+                  pattern: "[0-9\\.]+m?"
                 limit_memory:
                   description: Limit Memory
                   type: string
-                  pattern: "[0-9]*(Mi|Gi)"
+                  pattern: "[0-9\\.]+(G|Gi|M|Mi|K|Ki)?"
                 request_cpu:
                   description: Request CPU
                   type: string
-                  pattern: "[0-9]*m"
+                  pattern: "[0-9\\.]+m?"
                 request_memory:
                   description: Request memory
                   type: string
-                  pattern: "[0-9]*(Mi|Gi)"
+                  pattern: "[0-9\\.]+(G|Gi|M|Mi|K|Ki)?"
               required:
               - limit_cpu
               - limit_memory
@@ -108,7 +108,7 @@ spec:
               description: Size of the PVC storageclass which will be used by search-redisgraph
                 for persistence
               type: string
-              pattern: "[0-9]*(Mi|Gi)"
+              pattern: "[0-9\\.]+(G|Gi|M|Mi|K|Ki)?"
           required:
           - allowdegrademode
           - persistence
