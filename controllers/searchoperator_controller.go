@@ -10,6 +10,8 @@ import (
 	"reflect"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/intstr"
+
 	"github.com/go-logr/logr"
 	searchv1alpha1 "github.com/open-cluster-management/search-operator/api/v1"
 	appv1 "k8s.io/api/apps/v1"
@@ -172,7 +174,8 @@ func (r *SearchOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func int32Ptr(i int32) *int32 { return &i }
 
 func getStatefulSet(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.VolumeSource) *appv1.StatefulSet {
-
+	bool := false
+	intVal := int64(0)
 	return &appv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      statefulSetName,
@@ -221,6 +224,47 @@ func getStatefulSet(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.Volume
 									Name:  "REDIS_GRAPH_SSL",
 									Value: "true",
 								},
+							},
+							LivenessProbe: &v1.Probe{
+								InitialDelaySeconds: 10,
+								TimeoutSeconds:      1,
+								PeriodSeconds:       15,
+								SuccessThreshold:    1,
+								FailureThreshold:    3,
+								Handler: v1.Handler{
+									TCPSocket: &v1.TCPSocketAction{
+										Port: intstr.FromString("6380"),
+									},
+								},
+							},
+							ReadinessProbe: &v1.Probe{
+								InitialDelaySeconds: 5,
+								TimeoutSeconds:      1,
+								PeriodSeconds:       15,
+								SuccessThreshold:    1,
+								FailureThreshold:    3,
+								Handler: v1.Handler{
+									TCPSocket: &v1.TCPSocketAction{
+										Port: intstr.FromString("6380"),
+									},
+								},
+							},
+							Resources: v1.ResourceRequirements{
+								Limits: v1.ResourceList{
+									"cpu":    resource.MustParse(cr.Spec.Redisgraph_Resource.LimitCPU),
+									"memory": resource.MustParse(cr.Spec.Redisgraph_Resource.LimitMemory),
+								},
+								Requests: v1.ResourceList{
+									"cpu":    resource.MustParse(cr.Spec.Redisgraph_Resource.RequestCPU),
+									"memory": resource.MustParse(cr.Spec.Redisgraph_Resource.RequestMemory),
+								},
+							},
+							TerminationMessagePolicy: "File",
+							TerminationMessagePath:   "/dev/termination-log",
+							SecurityContext: &v1.SecurityContext{
+								Privileged:               &bool,
+								AllowPrivilegeEscalation: &bool,
+								RunAsUser:                &intVal,
 							},
 							VolumeMounts: []v1.VolumeMount{
 								{
