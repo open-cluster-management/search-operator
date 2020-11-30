@@ -251,7 +251,6 @@ func getStatefulSet(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.Volume
 							},
 							Resources: v1.ResourceRequirements{
 								Limits: v1.ResourceList{
-									"cpu":    resource.MustParse(cr.Spec.Redisgraph_Resource.LimitCPU),
 									"memory": resource.MustParse(cr.Spec.Redisgraph_Resource.LimitMemory),
 								},
 								Requests: v1.ResourceList{
