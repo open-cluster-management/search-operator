@@ -3,7 +3,7 @@ set -e
 
 echo "> Running build/install-dependencies.sh"
 
-_OPERATOR_SDK_VERSION=v0.17.0
+_OPERATOR_SDK_VERSION=v1.2.0
 
 echo "Installing operator-sdk..."
 

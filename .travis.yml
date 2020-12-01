@@ -36,7 +36,7 @@ env:
 stages:
   - build
   - unit-test
-  # - test-e2e
+  - test-e2e
   - release-ff
   - publish
 
@@ -64,15 +64,15 @@ jobs:
           make component/test/unit
           make security/scans
           make sonar/go
-    # - stage: test-e2e
-    #   name: "Deploy the image to a cluster and run e2e tests"
-    #   if: type = pull_request
-    #   script:
-    #     #Check out a clusterpool, set up oc, deploy, run e2e tests, and return clusterpool cluster
-    #     - if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then export COMPONENT_TAG_EXTENSION="-PR${TRAVIS_PULL_REQUEST}-${TRAVIS_COMMIT}"; fi;
-    #     - |
-    #       make component/pull 
-    #       make component/test/e2e
+    - stage: test-e2e
+      name: "Deploy the image to a cluster and run e2e tests"
+      if: type = pull_request
+      script:
+         #Check out a clusterpool, set up oc, deploy, run e2e tests, and return clusterpool cluster
+         - if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then export COMPONENT_TAG_EXTENSION="-PR${TRAVIS_PULL_REQUEST}-${TRAVIS_COMMIT}"; fi;
+         - |
+           make component/pull 
+           make component/test/e2e
     - stage: release-ff
       name: "Push commits to current release branch"
       if: type = push AND branch =~ /^master$/

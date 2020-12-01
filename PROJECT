@@ -1,0 +1,10 @@
+layout: go.kubebuilder.io/v2
+projectName: search-operator
+repo: github.com/open-cluster-management/search-operator
+resources:
+- group: search.open-cluster-management.io
+  kind: SearchOperator
+  version: v1
+version: 3-alpha
+plugins:
+  go.sdk.operatorframework.io/v2-alpha: {}

@@ -1,0 +1,20 @@
+# permissions for end users to view searchoperators.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: searchoperator-viewer-role
+rules:
+- apiGroups:
+  - search.open-cluster-management.io
+  resources:
+  - searchoperators
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - search.open-cluster-management.io
+  resources:
+  - searchoperators/status
+  verbs:
+  - get

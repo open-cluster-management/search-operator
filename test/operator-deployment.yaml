@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: search-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: search-operator
+  template:
+    metadata:
+      labels:
+        name: search-operator
+    spec:
+      serviceAccountName: search-operator
+      imagePullSecrets:
+        - name: search-operator-pull-secret
+      containers:
+      - args:
+        - --enable-leader-election
+        command:
+        - /manager  
+        image: quay.io/open-cluster-management/search-operator:2.2.0-PR21-1079d9b3abb55e1a1f66ecb6be075d96754758af
+        imagePullPolicy: IfNotPresent
+        name: search-operator
+        env:
+        - name: WATCH_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: OPERATOR_NAME
+          value: "search-operator"
+        resources:
+          limits:
+            memory: 256Mi
+          requests:
+            cpu: 10m
+            memory: 32Mi
