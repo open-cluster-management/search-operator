@@ -5,7 +5,6 @@ metadata:
 spec:
   # Add fields here
   redisgraph_resource:
-    limit_cpu: 250m
     limit_memory: 1Gi
     request_cpu: 25m
     request_memory: 64Mi

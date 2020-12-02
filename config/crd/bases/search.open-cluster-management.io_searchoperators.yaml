@@ -81,7 +81,6 @@ spec:
                   type: string
                   pattern: "[0-9\\.]+(G|Gi|M|Mi|K|Ki)?"
               required:
-              - limit_cpu
               - limit_memory
               - request_cpu
               - request_memory
