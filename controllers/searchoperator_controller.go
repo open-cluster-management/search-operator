@@ -73,30 +73,11 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		return ctrl.Result{}, err
 	}
 
-	// Define a new Secret object
-	secret := newRedisSecret(instance)
-
-	// Set SearchService instance as the owner and controller
-	if err := controllerutil.SetControllerReference(instance, secret, r.Scheme); err != nil {
+	// Create secret if not found
+	err = setupSecret(r.Client, instance, r.Scheme)
+	if err != nil {
+		// Error setting up secret - requeue the request.
 		return ctrl.Result{}, err
-	}
-
-	// Check if this Secret already exists
-	found := &corev1.Secret{}
-	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: secret.Name, Namespace: secret.Namespace}, found)
-	if err != nil && errors.IsNotFound(err) {
-		r.Log.Info("Creating a new Secret", "Secret.Namespace", secret.Namespace, "Secret.Name", secret.Name)
-		err = r.Client.Create(context.TODO(), secret)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		// Secret created successfully - don't requeue
-		//return reconcile.Result{}, nil
-	} else if err != nil {
-		return ctrl.Result{}, err
-	} else {
-		// Secret already exists - don't requeue
-		r.Log.Info("Skip reconcile: Secret already exists", "Secret.Namespace", found.Namespace, "Secret.Name", found.Name)
 	}
 
 	persistence := instance.Spec.Persistence
@@ -592,4 +573,32 @@ func executeDeployment(client client.Client, cr *searchv1alpha1.SearchOperator, 
 	}
 	updateRedisStatefulSet(client, statefulSet, cr.Namespace)
 	return statefulSet
+}
+
+func setupSecret(client client.Client, cr *searchv1alpha1.SearchOperator, scheme *runtime.Scheme) error {
+	// Define a new Secret object
+	secret := newRedisSecret(cr)
+
+	// Set SearchService instance as the owner and controller
+	if err := controllerutil.SetControllerReference(cr, secret, scheme); err != nil {
+		return err
+	}
+	// Check if this Secret already exists
+	found := &corev1.Secret{}
+	err := client.Get(context.TODO(), types.NamespacedName{Name: secret.Name, Namespace: secret.Namespace}, found)
+	if err != nil && errors.IsNotFound(err) {
+		log.Info("Creating a new Secret", "Secret.Namespace", secret.Namespace, "Secret.Name", secret.Name)
+		err = client.Create(context.TODO(), secret)
+		if err != nil {
+			return err
+		}
+		// Secret created successfully - don't requeue
+		return nil
+	} else if err != nil {
+		return err
+	} else {
+		// Secret already exists - don't requeue
+		log.Info("Skip reconcile: Secret already exists", "Secret.Namespace", found.Namespace, "Secret.Name", found.Name)
+	}
+	return nil
 }
