@@ -37,14 +37,17 @@ type SearchOperatorReconciler struct {
 }
 
 const (
-	pvcName                 = "redisgraph-pvc"
-	appName                 = "search"
-	component               = "redisgraph"
-	statefulSetName         = "search-redisgraph"
-	redisNotRunning         = "Redisgraph Pod not running"
-	statusUsingPVC          = "Redisgraph is using PersistenceVolumeClaim"
-	statusDegradedEmptyDir  = "Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim"
-	statusUsingNodeEmptyDir = "Node level persistence using EmptyDir"
+	pvcName                   = "redisgraph-pvc"
+	appName                   = "search"
+	component                 = "redisgraph"
+	statefulSetName           = "search-redisgraph"
+	redisNotRunning           = "Redisgraph Pod not running"
+	statusUsingPVC            = "Redisgraph is using PersistenceVolumeClaim"
+	statusDegradedEmptyDir    = "Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim"
+	statusUsingNodeEmptyDir   = "Node level persistence using EmptyDir"
+	statusFailedDegraded      = "Unable to create Redisgraph Deployment in Degraded Mode"
+	statusFailedUsingPVC      = "Unable to create Redisgraph Deployment using PVC"
+	statusFailedNoPersistence = "Unable to create Redisgraph Deployment"
 )
 
 var (
@@ -70,30 +73,11 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		return ctrl.Result{}, err
 	}
 
-	// Define a new Secret object
-	secret := newRedisSecret(instance)
-
-	// Set SearchService instance as the owner and controller
-	if err := controllerutil.SetControllerReference(instance, secret, r.Scheme); err != nil {
+	// Create secret if not found
+	err = setupSecret(r.Client, instance, r.Scheme)
+	if err != nil {
+		// Error setting up secret - requeue the request.
 		return ctrl.Result{}, err
-	}
-
-	// Check if this Secret already exists
-	found := &corev1.Secret{}
-	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: secret.Name, Namespace: secret.Namespace}, found)
-	if err != nil && errors.IsNotFound(err) {
-		r.Log.Info("Creating a new Secret", "Secret.Namespace", secret.Namespace, "Secret.Name", secret.Name)
-		err = r.Client.Create(context.TODO(), secret)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		// Secret created successfully - don't requeue
-		//return reconcile.Result{}, nil
-	} else if err != nil {
-		return ctrl.Result{}, err
-	} else {
-		// Secret already exists - don't requeue
-		r.Log.Info("Skip reconcile: Secret already exists", "Secret.Namespace", found.Namespace, "Secret.Name", found.Name)
 	}
 
 	persistence := instance.Spec.Persistence
@@ -111,7 +95,10 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			persistenceStatus == statusDegradedEmptyDir {
 			return ctrl.Result{}, nil
 		}
-		setupVolume(r.Client, instance)
+		pvcError := setupVolume(r.Client, instance)
+		if pvcError != nil {
+			return ctrl.Result{}, pvcError
+		}
 		executeDeployment(r.Client, instance, true, r.Scheme)
 		podReady := isPodRunning(r.Client, instance, true, waitSecondsForPodChk)
 		if podReady {
@@ -128,6 +115,10 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			if err != nil {
 				return ctrl.Result{}, err
 			}
+			err = deletePVC(r.Client, instance.Namespace)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
 			executeDeployment(r.Client, instance, false, r.Scheme)
 			if isPodRunning(r.Client, instance, false, waitSecondsForPodChk) {
 				//Write Status
@@ -139,11 +130,21 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 				}
 			} else {
 				r.Log.Info("Unable to create Redisgraph Deployment in Degraded Mode")
+				//Write Status
+				err := updateCR(r.Client, instance, statusFailedDegraded)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
 				return ctrl.Result{}, fmt.Errorf(redisNotRunning)
 			}
 		}
 		if !podReady && !allowdegrade {
 			r.Log.Info("Unable to create Redisgraph Deployment using PVC ")
+			//Write Status
+			err := updateCR(r.Client, instance, statusFailedUsingPVC)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
 			return ctrl.Result{}, fmt.Errorf(redisNotRunning)
 		}
 	} else {
@@ -161,6 +162,11 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			}
 		} else {
 			r.Log.Info("Unable to create Redisgraph Deployment")
+			//Write Status
+			err := updateCR(r.Client, instance, statusFailedNoPersistence)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
 			return ctrl.Result{}, fmt.Errorf(redisNotRunning)
 		}
 
@@ -389,6 +395,23 @@ func deleteRedisStatefulSet(client client.Client, namespace string) error {
 	return nil
 }
 
+func deletePVC(client client.Client, namespace string) error {
+	pvc := &v1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pvcName,
+			Namespace: namespace,
+		},
+	}
+	err := client.Delete(context.TODO(), pvc)
+	if err != nil && !errors.IsNotFound(err) {
+		log.Error(err, "Failed to delete search redisgraph PVC", "name", pvcName)
+		return err
+	}
+	time.Sleep(1 * time.Second) //Sleep for a minute to avoid quick update of statefulset
+	log.Info("PVC deleted", "name", pvcName)
+	return nil
+}
+
 func getPVC(cr *searchv1alpha1.SearchOperator) *v1.PersistentVolumeClaim {
 	if cr.Spec.StorageClass != "" {
 		return &v1.PersistentVolumeClaim{
@@ -424,7 +447,7 @@ func getPVC(cr *searchv1alpha1.SearchOperator) *v1.PersistentVolumeClaim {
 }
 
 //Remove PVC if you have one
-func setupVolume(client client.Client, cr *searchv1alpha1.SearchOperator) {
+func setupVolume(client client.Client, cr *searchv1alpha1.SearchOperator) error {
 	found := &v1.PersistentVolumeClaim{}
 	pvc := getPVC(cr)
 	err := client.Get(context.TODO(), types.NamespacedName{Name: pvcName, Namespace: cr.Namespace}, found)
@@ -435,17 +458,18 @@ func setupVolume(client client.Client, cr *searchv1alpha1.SearchOperator) {
 		if err != nil {
 			log.Info("Error creating a new PVC ", logKeyPVCName, pvcName)
 			log.Info(err.Error())
-			return
+			return err
 		} else {
 			log.Info("Created a new PVC ", logKeyPVCName, pvcName)
-			return
+			return nil
 		}
 	} else if err != nil {
 		log.Info("Error finding PVC ", logKeyPVCName, pvcName)
 		//return False and error if there is Error
-		return
+		return err
 	}
 	log.Info("Using existing PVC")
+	return nil
 }
 
 func generatePass(length int) []byte {
@@ -549,4 +573,32 @@ func executeDeployment(client client.Client, cr *searchv1alpha1.SearchOperator, 
 	}
 	updateRedisStatefulSet(client, statefulSet, cr.Namespace)
 	return statefulSet
+}
+
+func setupSecret(client client.Client, cr *searchv1alpha1.SearchOperator, scheme *runtime.Scheme) error {
+	// Define a new Secret object
+	secret := newRedisSecret(cr)
+
+	// Set SearchService instance as the owner and controller
+	if err := controllerutil.SetControllerReference(cr, secret, scheme); err != nil {
+		return err
+	}
+	// Check if this Secret already exists
+	found := &corev1.Secret{}
+	err := client.Get(context.TODO(), types.NamespacedName{Name: secret.Name, Namespace: secret.Namespace}, found)
+	if err != nil && errors.IsNotFound(err) {
+		log.Info("Creating a new Secret", "Secret.Namespace", secret.Namespace, "Secret.Name", secret.Name)
+		err = client.Create(context.TODO(), secret)
+		if err != nil {
+			return err
+		}
+		// Secret created successfully - don't requeue
+		return nil
+	} else if err != nil {
+		return err
+	} else {
+		// Secret already exists - don't requeue
+		log.Info("Skip reconcile: Secret already exists", "Secret.Namespace", found.Namespace, "Secret.Name", found.Name)
+	}
+	return nil
 }
