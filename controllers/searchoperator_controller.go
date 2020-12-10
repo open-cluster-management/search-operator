@@ -182,6 +182,8 @@ func (r *SearchOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func int32Ptr(i int32) *int32 { return &i }
 
+func int64Ptr(i int64) *int64 { return &i }
+
 func getStatefulSet(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.VolumeSource) *appv1.StatefulSet {
 	bool := false
 	return &appv1.StatefulSet{
@@ -212,6 +214,10 @@ func getStatefulSet(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.Volume
 					ImagePullSecrets: []v1.LocalObjectReference{{
 						Name: cr.Spec.PullSecret,
 					}},
+					SecurityContext: &v1.PodSecurityContext{
+						FSGroup:    int64Ptr(1000140000),
+						RunAsGroup: int64Ptr(1000140000),
+					},
 					Containers: []v1.Container{
 						{
 							Name:  "redisgraph",
