@@ -48,6 +48,7 @@ const (
 	statusFailedDegraded      = "Unable to create Redisgraph Deployment in Degraded Mode"
 	statusFailedUsingPVC      = "Unable to create Redisgraph Deployment using PVC"
 	statusFailedNoPersistence = "Unable to create Redisgraph Deployment"
+	redisUser                 = int64(1001)
 )
 
 var (
@@ -191,7 +192,8 @@ func getStatefulSet(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.Volume
 			Name:      statefulSetName,
 			Namespace: cr.Namespace,
 			Annotations: map[string]string{
-				"owner": "search-operator",
+				"owner":            "search-operator",
+				"openshift.io/scc": "anyuid",
 			},
 		},
 		Spec: appv1.StatefulSetSpec{
@@ -215,8 +217,8 @@ func getStatefulSet(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.Volume
 						Name: cr.Spec.PullSecret,
 					}},
 					SecurityContext: &v1.PodSecurityContext{
-						FSGroup:    int64Ptr(1000140000),
-						RunAsGroup: int64Ptr(1000140000),
+						FSGroup:    int64Ptr(redisUser),
+						RunAsGroup: int64Ptr(redisUser),
 					},
 					Containers: []v1.Container{
 						{
