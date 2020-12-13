@@ -218,7 +218,7 @@ func getStatefulSet(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.Volume
 					}},
 					SecurityContext: &v1.PodSecurityContext{
 						FSGroup:    int64Ptr(redisUser),
-						RunAsGroup: int64Ptr(redisUser),
+						RunAsUser: int64Ptr(redisUser),
 					},
 					Containers: []v1.Container{
 						{
