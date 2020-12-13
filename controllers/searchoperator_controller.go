@@ -48,7 +48,7 @@ const (
 	statusFailedDegraded      = "Unable to create Redisgraph Deployment in Degraded Mode"
 	statusFailedUsingPVC      = "Unable to create Redisgraph Deployment using PVC"
 	statusFailedNoPersistence = "Unable to create Redisgraph Deployment"
-	redisUser                 = int64(1001)
+	redisUser                 = int64(10001)
 )
 
 var (
