@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/go-logr/logr"
+	searchopenclustermanagementiov1 "github.com/open-cluster-management/search-operator/api/v1"
 	searchv1alpha1 "github.com/open-cluster-management/search-operator/api/v1"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -54,9 +55,11 @@ const (
 var (
 	waitSecondsForPodChk = 180 //Wait for 3 minutes
 	log                  = logf.Log.WithName("searchoperator")
+	persistence          = true
+	allowdegrade         = true
+	storageClass         = ""
+	storageSize          = "10Gi"
 )
-var persistence, allowdegrade bool = true, true
-var storageClass, storageSize = "", "10Gi"
 
 func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
@@ -64,7 +67,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 
 	// Fetch the SearchOperator instance
 	instance := &searchv1alpha1.SearchOperator{}
-	err := r.Client.Get(context.TODO(), req.NamespacedName, instance)
+	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: "searchoperator", Namespace: req.Namespace}, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -74,6 +77,33 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		}
 		// Error reading the object - requeue the request.
 		return ctrl.Result{}, err
+	}
+
+	// Fetch the SearchCustomization instance
+	custom := &searchv1alpha1.SearchCustomization{}
+	customValuesInuse := false
+	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: "searchcustomization", Namespace: req.Namespace}, custom)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Request object not found, could have been deleted after reconcile request.
+			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
+			// Set the values to defult
+			persistence = true
+			allowdegrade = true
+			storageClass = ""
+			storageSize = "10Gi"
+		}
+		// Error reading the object - requeue the request.
+		return ctrl.Result{}, err
+	} else {
+		//set the  user provided values
+		customValuesInuse = true
+		if custom.Spec.Persistence || custom.Spec.StorageClass != "" {
+			persistence = true
+		}
+		allowdegrade = custom.Spec.FallbackToEmptyDir
+		storageClass = custom.Spec.StorageClass
+		storageSize = custom.Spec.StorageSize
 	}
 
 	// Create secret if not found
@@ -105,7 +135,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		podReady := isPodRunning(r.Client, instance, true, waitSecondsForPodChk)
 		if podReady {
 			//Write Status
-			err := updateCR(r.Client, instance, statusUsingPVC)
+			err := updateCRs(r.Client, instance, statusUsingPVC, custom, persistence, storageClass, storageSize, customValuesInuse)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
@@ -124,7 +154,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			executeDeployment(r.Client, instance, false, r.Scheme)
 			if isPodRunning(r.Client, instance, false, waitSecondsForPodChk) {
 				//Write Status
-				err := updateCR(r.Client, instance, statusDegradedEmptyDir)
+				err := updateCRs(r.Client, instance, statusDegradedEmptyDir, custom, false, "", "", customValuesInuse)
 				if err != nil {
 					return ctrl.Result{}, err
 				} else {
@@ -133,7 +163,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			} else {
 				r.Log.Info("Unable to create Redisgraph Deployment in Degraded Mode")
 				//Write Status
-				err := updateCR(r.Client, instance, statusFailedDegraded)
+				err := updateCRs(r.Client, instance, statusFailedDegraded, custom, false, "", "", customValuesInuse)
 				if err != nil {
 					return ctrl.Result{}, err
 				}
@@ -143,7 +173,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		if !podReady && !allowdegrade {
 			r.Log.Info("Unable to create Redisgraph Deployment using PVC ")
 			//Write Status
-			err := updateCR(r.Client, instance, statusFailedUsingPVC)
+			err := updateCRs(r.Client, instance, statusFailedUsingPVC, custom, false, "", "", customValuesInuse)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
@@ -158,14 +188,14 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		executeDeployment(r.Client, instance, false, r.Scheme)
 		if isPodRunning(r.Client, instance, false, waitSecondsForPodChk) {
 			//Write Status
-			err := updateCR(r.Client, instance, statusUsingNodeEmptyDir)
+			err := updateCRs(r.Client, instance, statusUsingNodeEmptyDir, custom, false, "", "", customValuesInuse)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
 		} else {
 			r.Log.Info("Unable to create Redisgraph Deployment")
 			//Write Status
-			err := updateCR(r.Client, instance, statusFailedNoPersistence)
+			err := updateCRs(r.Client, instance, statusFailedNoPersistence, custom, false, "", "", customValuesInuse)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
@@ -179,6 +209,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 func (r *SearchOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&searchv1alpha1.SearchOperator{}).
+		For(&searchopenclustermanagementiov1.SearchCustomization{}).
 		Complete(r)
 }
 
@@ -336,8 +367,22 @@ func getStatefulSet(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.Volume
 		},
 	}
 }
+func updateCRs(kclient client.Client, operatorCR *searchv1alpha1.SearchOperator, status string, customizationCR *searchv1alpha1.SearchCustomization, persistence bool, storageClass string, storageSize string, customValuesInuse bool) error {
+	var err error
+	err = updateOperatorCR(kclient, operatorCR, status)
+	if err != nil {
+		return err
+	}
+	if customValuesInuse {
+		err = updateCustomizationCR(kclient, customizationCR, persistence, storageClass, storageSize)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
-func updateCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, status string) error {
+func updateOperatorCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, status string) error {
 	found := &searchv1alpha1.SearchOperator{}
 	err := kclient.Get(context.TODO(), types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace}, found)
 	if err != nil {
@@ -354,6 +399,29 @@ func updateCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, status s
 		return err
 	} else {
 		log.Info(fmt.Sprintf("Updated CR status with persistence %s  ", cr.Status.PersistenceStatus))
+	}
+	return nil
+}
+
+func updateCustomizationCR(kclient client.Client, cr *searchv1alpha1.SearchCustomization, persistence bool, storageClass string, storageSize string) error {
+	found := &searchv1alpha1.SearchCustomization{}
+	err := kclient.Get(context.TODO(), types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace}, found)
+	if err != nil {
+		log.Error(err, fmt.Sprintf("Failed to get SearchCustomization %s/%s ", cr.Namespace, cr.Name))
+		return err
+	}
+	cr.Status.Persistence = persistence
+	cr.Status.StorageClass = storageClass
+	cr.Status.StorageSize = storageSize
+	err = kclient.Status().Update(context.TODO(), cr)
+	if err != nil {
+		if apierrors.IsConflict(err) {
+			log.Info("Failed to update status Object has been modified")
+		}
+		log.Error(err, fmt.Sprintf("Failed to update %s/%s status ", cr.Namespace, cr.Name))
+		return err
+	} else {
+		log.Info(fmt.Sprintf("Updated CR status with custom persistence %s  ", cr.Status.Persistence))
 	}
 	return nil
 }
