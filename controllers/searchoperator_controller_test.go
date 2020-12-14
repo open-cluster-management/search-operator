@@ -56,9 +56,6 @@ func commonSetup() testSetup {
 			Namespace: namespace,
 		},
 		Spec: searchv1alpha1.SearchOperatorSpec{
-			Persistence:         false,
-			AllowDegradeMode:    true,
-			StorageSize:         "1M",
 			Redisgraph_Resource: redisPodResource,
 		},
 	}
@@ -73,8 +70,8 @@ func commonSetup() testSetup {
 	client := fake.NewFakeClientWithScheme(testScheme)
 	testStatefulsetWithPVC := executeDeployment(client, testSearchOperator, true, testScheme)
 	testStatefulsetWithOutPVC := executeDeployment(client, testSearchOperator, false, testScheme)
-
-	fakePVC := createFakeNamedPVC(testSearchOperator.Spec.StorageSize, testSearchOperator.Namespace, nil)
+	// Set PVC Size to 10Gi
+	fakePVC := createFakeNamedPVC("10Gi", testSearchOperator.Namespace, nil)
 	fakePodWithPVC := createFakeRedisGraphPod(namespace, true, true)
 	fakePodWithOutPVC := createFakeRedisGraphPod(namespace, false, true)
 	fakeUnschedulablePod := createFakeRedisGraphPod(namespace, false, false)
@@ -207,8 +204,8 @@ func Test_StatefulsetWithPVC(t *testing.T) {
 	assert.Nil(t, err, "Expected search Operator to be created. Got error: %v", err)
 
 	//Set persistence to true in operator - this should cause statefulset to fall back to empty dir since we don't have PVC
-	instance.Spec.Persistence = true
-	instance.Spec.StorageClass = "gp2"
+	//instance.Spec.Persistence = true
+	//instance.Spec.StorageClass = "gp2"
 	err = client.Update(context.TODO(), instance)
 	err = client.Get(context.TODO(), req.NamespacedName, instance)
 
@@ -248,7 +245,7 @@ func Test_FallBacktoEmptyDirStatefulset(t *testing.T) {
 	assert.Nil(t, err, "Expected search Operator to be created. Got error: %v", err)
 
 	//Set persistence to true in operator - this should cause statefulset to fall back to empty dir since we don't have PVC
-	instance.Spec.Persistence = true
+	//instance.Spec.Persistence = true
 	err = client.Update(context.TODO(), instance)
 	err = client.Get(context.TODO(), req.NamespacedName, instance)
 
@@ -286,7 +283,7 @@ func Test_UnschedulablePod(t *testing.T) {
 	assert.Nil(t, err, "Expected search Operator to be created. Got error: %v", err)
 
 	//Set persistence to true in operator - this should cause statefulset to fall back to empty dir since we don't have PVC
-	instance.Spec.Persistence = true
+	//instance.Spec.Persistence = true
 	err = client.Update(context.TODO(), instance)
 	_, err = nilSearchOperator.Reconcile(req)
 	assert.NotNil(t, err, "Expected error to be not nil. Got nil.")
@@ -317,9 +314,9 @@ func Test_UnschedulablePodWithDisAllowDegradedMode(t *testing.T) {
 	assert.Nil(t, err, "Expected search Operator to be created. Got error: %v", err)
 
 	//Set persistence to true in operator - this should cause statefulset to fall back to empty dir since we don't have PVC
-	instance.Spec.Persistence = true
+	//instance.Spec.Persistence = true
 	//Set allowDegradedMode to false in operator - this should cause statefulset to fall back to empty dir since we don't have PVC
-	instance.Spec.AllowDegradeMode = false
+	//instance.Spec.AllowDegradeMode = false
 	err = client.Update(context.TODO(), instance)
 	_, err = nilSearchOperator.Reconcile(req)
 	assert.NotNil(t, err, "Expected error to be not nil. Got nil.")

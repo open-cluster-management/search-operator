@@ -55,6 +55,8 @@ var (
 	waitSecondsForPodChk = 180 //Wait for 3 minutes
 	log                  = logf.Log.WithName("searchoperator")
 )
+var persistence, allowdegrade bool = true, true
+var storageClass, storageSize = "", "10Gi"
 
 func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
@@ -81,11 +83,10 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		return ctrl.Result{}, err
 	}
 
-	persistence := instance.Spec.Persistence
 	persistenceStatus := instance.Status.PersistenceStatus
-	allowdegrade := instance.Spec.AllowDegradeMode
+
 	// Setup RedisGraph Deployment
-	r.Log.Info(fmt.Sprintf("Config in Use Persistence/AllowDegrade %v/%v", persistence, allowdegrade))
+	r.Log.Info(fmt.Sprintf("Config in Test Use Persistence/AllowDegrade %t/%t", persistence, allowdegrade))
 	if persistence {
 		//If running PVC deployment nothing to do
 		if isPodRunning(r.Client, instance, true, 1) && persistenceStatus == statusUsingPVC {
@@ -217,7 +218,7 @@ func getStatefulSet(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.Volume
 						Name: cr.Spec.PullSecret,
 					}},
 					SecurityContext: &v1.PodSecurityContext{
-						FSGroup:    int64Ptr(redisUser),
+						FSGroup:   int64Ptr(redisUser),
 						RunAsUser: int64Ptr(redisUser),
 					},
 					Containers: []v1.Container{
@@ -421,7 +422,7 @@ func deletePVC(client client.Client, namespace string) error {
 }
 
 func getPVC(cr *searchv1alpha1.SearchOperator) *v1.PersistentVolumeClaim {
-	if cr.Spec.StorageClass != "" {
+	if storageClass != "" {
 		return &v1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      pvcName,
@@ -431,10 +432,10 @@ func getPVC(cr *searchv1alpha1.SearchOperator) *v1.PersistentVolumeClaim {
 				AccessModes: []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
 				Resources: v1.ResourceRequirements{
 					Requests: v1.ResourceList{
-						v1.ResourceName(v1.ResourceStorage): resource.MustParse(cr.Spec.StorageSize),
+						v1.ResourceName(v1.ResourceStorage): resource.MustParse(storageSize),
 					},
 				},
-				StorageClassName: &cr.Spec.StorageClass,
+				StorageClassName: &storageClass,
 			},
 		}
 	}
@@ -447,7 +448,7 @@ func getPVC(cr *searchv1alpha1.SearchOperator) *v1.PersistentVolumeClaim {
 			AccessModes: []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
 			Resources: v1.ResourceRequirements{
 				Requests: v1.ResourceList{
-					v1.ResourceName(v1.ResourceStorage): resource.MustParse(cr.Spec.StorageSize),
+					v1.ResourceName(v1.ResourceStorage): resource.MustParse(storageSize),
 				},
 			},
 		},

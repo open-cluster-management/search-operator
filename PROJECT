@@ -5,6 +5,9 @@ resources:
 - group: search.open-cluster-management.io
   kind: SearchOperator
   version: v1
+- group: search.open-cluster-management.io
+  kind: SearchCustomization
+  version: v1
 version: 3-alpha
 plugins:
   go.sdk.operatorframework.io/v2-alpha: {}

@@ -28,20 +28,6 @@ type SearchOperatorSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// If specified this storage class is used , else default storage class will
-	//be used by kubernetes
-	// +optional
-	StorageClass string `json:"storageclass,omitempty"`
-
-	// Size of the PVC storageclass which will be used by search-redisgraph for persistence
-	StorageSize string `json:"storagesize"`
-
-	// If true, then PVC configuration is used for search-redisgraph pod
-	Persistence bool `json:"persistence"`
-	// If true, then whenever PVC cannot be Bound to search-redisgraph pod
-	// then controller automatically sets up EmptyDir volume for search-redisgraph
-	//persistence
-	AllowDegradeMode bool `json:"allowdegrademode"`
 	// Image to use in deployment
 	SearchImageOverrides ImageOverrides `json:"searchimageoverrides"`
 

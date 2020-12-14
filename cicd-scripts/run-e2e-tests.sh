@@ -112,7 +112,7 @@ test_default_pvc() {
 
 	# cd search-operator
     echo -n "Applying search operator CRD:" && kubectl apply -f ./config/crd/bases/search.open-cluster-management.io_searchoperators.yaml
-
+    echo -n "Applying search customization CRD:" && kubectl apply -f ./config/crd/bases/search.open-cluster-management.io_searchcustomizations.yaml
     echo -n "Applying sample search operator: "  && kubectl apply -f ./config/samples/search.open-cluster-management.io_v1_searchoperator.yaml
 	echo -n "Applying search operator service account: "  && kubectl apply -f ./test/service_account.yaml
 	echo -n "Applying search operator role: "  && kubectl apply -f ./deploy/role.yaml

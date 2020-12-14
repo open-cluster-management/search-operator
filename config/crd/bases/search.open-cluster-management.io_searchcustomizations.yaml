@@ -1,0 +1,84 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.3.0
+  creationTimestamp: null
+  name: searchcustomizations.search.open-cluster-management.io
+spec:
+  group: search.open-cluster-management.io
+  names:
+    kind: SearchCustomization
+    listKind: SearchCustomizationList
+    plural: searchcustomizations
+    singular: searchcustomization
+  scope: Namespaced
+  subresources:
+    status: {}
+  validation:
+    openAPIV3Schema:
+      description: SearchCustomization is the Schema for the searchcustomizations
+        API
+      properties:
+        apiVersion:
+          description: 'APIVersion defines the versioned schema of this representation
+            of an object. Servers should convert recognized schemas to the latest
+            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+          type: string
+        kind:
+          description: 'Kind is a string value representing the REST resource this
+            object represents. Servers may infer this from the endpoint the client
+            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+          type: string
+        metadata:
+          type: object
+        spec:
+          description: SearchCustomizationSpec defines the desired state of SearchCustomization
+          properties:
+            fallbackToEmptyDir:
+              description: If true, then whenever PVC cannot be Bound to search-redisgraph
+                pod then controller automatically sets up EmptyDir volume for search-redisgraph
+              type: boolean
+            persistence:
+              description: If true, then a PVC is created on the stroageclass provided
+                (if none specified , default storageclass)is used to persist redis
+                data .
+              type: boolean
+            storageClass:
+              description: If specified this storage class is used, else default storage
+                class will be used by kubernetes. If storageclass is specified, persistence
+                must be set to true.
+              type: string
+            storageSize:
+              description: Size of the PVC which will be used by search-redisgraph
+                for persistence
+              type: string
+          type: object
+        status:
+          description: SearchCustomizationStatus defines the observed state of SearchCustomization
+          properties:
+            persistence:
+              type: boolean
+            storageClass:
+              type: string
+            storageSize:
+              type: string
+          required:
+          - persistence
+          - storageClass
+          - storageSize
+          type: object
+      type: object
+  version: v1
+  versions:
+  - name: v1
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

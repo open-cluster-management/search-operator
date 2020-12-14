@@ -76,6 +76,14 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "SearchOperator")
 		os.Exit(1)
 	}
+	if err = (&controllers.SearchCustomizationReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("SearchCustomization"),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SearchCustomization")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")
