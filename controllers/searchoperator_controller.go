@@ -27,7 +27,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // SearchOperatorReconciler reconciles a SearchOperator object
@@ -93,8 +96,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			storageClass = ""
 			storageSize = "10Gi"
 		}
-		// Error reading the object - requeue the request.
-		return ctrl.Result{}, err
+
 	} else {
 		//set the  user provided values
 		customValuesInuse = true
@@ -207,9 +209,13 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 }
 
 func (r *SearchOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	searchCustomizationFn := handler.ToRequestsFunc(
+		func(a handler.MapObject) []reconcile.Request {
+			return []reconcile.Request{}
+		})
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&searchv1alpha1.SearchOperator{}).
-		For(&searchopenclustermanagementiov1.SearchCustomization{}).
+		Watches(&source.Kind{Type: &searchopenclustermanagementiov1.SearchCustomization{}}, &handler.EnqueueRequestsFromMapFunc{ToRequests: searchCustomizationFn}).
 		Complete(r)
 }
 
