@@ -1,7 +1,7 @@
 apiVersion: search.open-cluster-management.io/v1
 kind: SearchCustomization
 metadata:
-  name: searchcustomization-sample
+  name: searchcustomization
 spec:
   # Add fields here
-  foo: bar
+  persistence: false

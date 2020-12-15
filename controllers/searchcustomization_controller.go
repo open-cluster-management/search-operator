@@ -20,11 +20,10 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	searchopenclustermanagementiov1 "github.com/open-cluster-management/search-operator/api/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	searchopenclustermanagementiov1 "github.com/open-cluster-management/search-operator/api/v1"
 )
 
 // SearchCustomizationReconciler reconciles a SearchCustomization object

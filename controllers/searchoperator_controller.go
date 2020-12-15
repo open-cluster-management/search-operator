@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"os"
 	"reflect"
 	"time"
 
@@ -27,8 +28,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
@@ -95,17 +98,27 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			allowdegrade = true
 			storageClass = ""
 			storageSize = "10Gi"
+		} else {
+			return ctrl.Result{}, err
 		}
 
 	} else {
-		//set the  user provided values
-		customValuesInuse = true
-		if custom.Spec.Persistence || custom.Spec.StorageClass != "" {
+		if custom.Spec.FallbackToEmptyDir != nil {
+			allowdegrade = *custom.Spec.FallbackToEmptyDir
+		}
+		if custom.Spec.Persistence != nil {
+			persistence = *custom.Spec.Persistence
+		}
+		if custom.Spec.StorageClass != "" {
 			persistence = true
 		}
-		allowdegrade = custom.Spec.FallbackToEmptyDir
+		//set the  user provided values
+		customValuesInuse = true
 		storageClass = custom.Spec.StorageClass
-		storageSize = custom.Spec.StorageSize
+		if custom.Spec.StorageSize != "" {
+			storageSize = custom.Spec.StorageSize
+		}
+		r.Log.Info(fmt.Sprintf("Storage %s", storageSize))
 	}
 
 	// Create secret if not found
@@ -118,7 +131,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	persistenceStatus := instance.Status.PersistenceStatus
 
 	// Setup RedisGraph Deployment
-	r.Log.Info(fmt.Sprintf("Config in Test Use Persistence/AllowDegrade %t/%t", persistence, allowdegrade))
+	r.Log.Info(fmt.Sprintf("Config in  Use Persistence/AllowDegrade %t/%t", persistence, allowdegrade))
 	if persistence {
 		//If running PVC deployment nothing to do
 		if isPodRunning(r.Client, instance, true, 1) && persistenceStatus == statusUsingPVC {
@@ -209,13 +222,42 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 }
 
 func (r *SearchOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	watchNamespace := os.Getenv("WATCH_NAMESPACE")
+	pred := predicate.Funcs{
+		CreateFunc: func(e event.CreateEvent) bool {
+			if e.Meta.GetNamespace() == watchNamespace {
+				return true
+			}
+			return false
+		},
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			if e.MetaNew.GetNamespace() == watchNamespace &&
+				e.MetaNew.GetResourceVersion() != e.MetaOld.GetResourceVersion() {
+				return true
+			}
+			return false
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			if e.Meta.GetNamespace() == watchNamespace {
+				return e.DeleteStateUnknown
+			}
+			return false
+		},
+	}
+
 	searchCustomizationFn := handler.ToRequestsFunc(
 		func(a handler.MapObject) []reconcile.Request {
-			return []reconcile.Request{}
+			return []reconcile.Request{
+				{NamespacedName: types.NamespacedName{
+					Name:      "searchcustomization",
+					Namespace: watchNamespace,
+				}},
+			}
 		})
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&searchv1alpha1.SearchOperator{}).
 		Watches(&source.Kind{Type: &searchopenclustermanagementiov1.SearchCustomization{}}, &handler.EnqueueRequestsFromMapFunc{ToRequests: searchCustomizationFn}).
+		WithEventFilter(pred).
 		Complete(r)
 }
 

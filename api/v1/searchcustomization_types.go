@@ -40,12 +40,12 @@ type SearchCustomizationSpec struct {
 	// If true, then a PVC is created on the stroageclass provided (if none specified ,
 	//default storageclass)is used to persist redis data .
 	// +optional
-	Persistence bool `json:"persistence,omitempty"`
+	Persistence *bool `json:"persistence,omitempty"`
 
 	// If true, then whenever PVC cannot be Bound to search-redisgraph
 	//pod then controller automatically sets up EmptyDir volume for search-redisgraph
 	// +optional
-	FallbackToEmptyDir bool `json:"fallbackToEmptyDir,omitempty"`
+	FallbackToEmptyDir *bool `json:"fallbackToEmptyDir,omitempty"`
 }
 
 // SearchCustomizationStatus defines the observed state of SearchCustomization
