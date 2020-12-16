@@ -31,6 +31,7 @@ type testSetup struct {
 	podWithPVC            *corev1.Pod
 	podWithOutPVC         *corev1.Pod
 	unSchedulablePod      *corev1.Pod
+	customizationCR       *searchv1alpha1.SearchCustomization
 }
 
 func commonSetup() testSetup {
@@ -52,7 +53,7 @@ func commonSetup() testSetup {
 			Kind:       "SearchOperator",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-cluster",
+			Name:      "searchoperator",
 			Namespace: namespace,
 		},
 		Spec: searchv1alpha1.SearchOperatorSpec{
@@ -62,11 +63,10 @@ func commonSetup() testSetup {
 	testSecret := newRedisSecret(testSearchOperator)
 	req := reconcile.Request{
 		NamespacedName: types.NamespacedName{
-			Name:      "test-cluster",
+			Name:      "searchoperator",
 			Namespace: namespace,
 		},
 	}
-
 	client := fake.NewFakeClientWithScheme(testScheme)
 	testStatefulsetWithPVC := executeDeployment(client, testSearchOperator, true, testScheme)
 	testStatefulsetWithOutPVC := executeDeployment(client, testSearchOperator, false, testScheme)
@@ -75,6 +75,7 @@ func commonSetup() testSetup {
 	fakePodWithPVC := createFakeRedisGraphPod(namespace, true, true)
 	fakePodWithOutPVC := createFakeRedisGraphPod(namespace, false, true)
 	fakeUnschedulablePod := createFakeRedisGraphPod(namespace, false, false)
+	fakeSearchCustCR := createFakeSearchCustomizationCR(namespace, false, false)
 	testSetup := testSetup{scheme: testScheme,
 		request:               req,
 		srchOperator:          testSearchOperator,
@@ -84,8 +85,8 @@ func commonSetup() testSetup {
 		pvc:                   fakePVC,
 		podWithPVC:            fakePodWithPVC,
 		podWithOutPVC:         fakePodWithOutPVC,
-		unSchedulablePod:      fakeUnschedulablePod}
-
+		unSchedulablePod:      fakeUnschedulablePod,
+		customizationCR:       fakeSearchCustCR}
 	return testSetup
 }
 
@@ -176,10 +177,14 @@ func Test_EmptyDirStatefulsetCreatedWithOwnerRef(t *testing.T) {
 func Test_EmptyDirStatefulsetWithNodePersistenceStatus(t *testing.T) {
 	testSetup := commonSetup()
 
-	client := fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, testSetup.secret, testSetup.podWithOutPVC)
+	client := fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, testSetup.secret, testSetup.podWithOutPVC, testSetup.customizationCR)
 	nilSearchOperator := SearchOperatorReconciler{client, log, testSetup.scheme}
 	var err error
 	instance := &searchv1alpha1.SearchOperator{}
+	//Turn persistence to false in customizationCR
+	persistence := false
+	testSetup.customizationCR.Spec.Persistence = &persistence
+	err = client.Update(context.TODO(), testSetup.customizationCR)
 
 	_, err = nilSearchOperator.Reconcile(testSetup.request)
 	//Calling reconcile again to check if shorter path with 1 sec wait time is used the second time
@@ -203,12 +208,7 @@ func Test_StatefulsetWithPVC(t *testing.T) {
 	err = client.Get(context.TODO(), req.NamespacedName, instance)
 	assert.Nil(t, err, "Expected search Operator to be created. Got error: %v", err)
 
-	//Set persistence to true in operator - this should cause statefulset to fall back to empty dir since we don't have PVC
-	//instance.Spec.Persistence = true
-	//instance.Spec.StorageClass = "gp2"
-	err = client.Update(context.TODO(), instance)
-	err = client.Get(context.TODO(), req.NamespacedName, instance)
-
+	//Persistence is enabled by default in search operator
 	_, err = nilSearchOperator.Reconcile(req)
 	//Calling reconcile again to check if shorter path with 1 sec wait time is used the second time
 	_, err = nilSearchOperator.Reconcile(req)
@@ -244,10 +244,10 @@ func Test_FallBacktoEmptyDirStatefulset(t *testing.T) {
 	err = client.Get(context.TODO(), req.NamespacedName, instance)
 	assert.Nil(t, err, "Expected search Operator to be created. Got error: %v", err)
 
-	//Set persistence to true in operator - this should cause statefulset to fall back to empty dir since we don't have PVC
-	//instance.Spec.Persistence = true
-	err = client.Update(context.TODO(), instance)
-	err = client.Get(context.TODO(), req.NamespacedName, instance)
+	//Set persistence to true in customizationCR - this should cause statefulset to fall back to empty dir since we don't have PVC
+	persistence := true
+	testSetup.customizationCR.Spec.Persistence = &persistence
+	err = client.Create(context.TODO(), testSetup.customizationCR)
 
 	_, err = nilSearchOperator.Reconcile(req)
 	//Calling reconcile again to check if shorter path with 1 sec wait time is used the second time
@@ -282,9 +282,7 @@ func Test_UnschedulablePod(t *testing.T) {
 	err = client.Get(context.TODO(), req.NamespacedName, instance)
 	assert.Nil(t, err, "Expected search Operator to be created. Got error: %v", err)
 
-	//Set persistence to true in operator - this should cause statefulset to fall back to empty dir since we don't have PVC
-	//instance.Spec.Persistence = true
-	err = client.Update(context.TODO(), instance)
+	//Persistence is enabled by default in operator - this should cause statefulset to fall back to empty dir since we don't have PVC
 	_, err = nilSearchOperator.Reconcile(req)
 	assert.NotNil(t, err, "Expected error to be not nil. Got nil.")
 	assert.Equal(t, "Redisgraph Pod not running", err.Error(), "Expected Redisgraph Pod not running error. Got %v", err)
@@ -292,11 +290,12 @@ func Test_UnschedulablePod(t *testing.T) {
 	foundStatefulset := &appv1.StatefulSet{}
 	err = client.Get(context.TODO(), types.NamespacedName{Name: testStatefulset.Name, Namespace: testStatefulset.Namespace}, foundStatefulset)
 	assert.Nil(t, err, "Expected Statefulset to be created. Got error: %v", err)
+	err = client.Get(context.TODO(), req.NamespacedName, instance)
 
 	assert.Equal(t, testStatefulset.Name, foundStatefulset.Name, "Statefulset is created with expected name.")
 	assert.Equal(t, testStatefulset.Namespace, foundStatefulset.Namespace, "Statefulset is created in expected namespace.")
 	assert.EqualValues(t, testStatefulset.Spec.Template.Spec, foundStatefulset.Spec.Template.Spec, "Statefulset is created with expected template spec.")
-	assert.Equal(t, "", instance.Status.PersistenceStatus, "Search Operator does not have status as expected.")
+	assert.Equal(t, statusFailedDegraded, instance.Status.PersistenceStatus, "Search Operator does not have status as expected.")
 }
 
 func Test_UnschedulablePodWithDisAllowDegradedMode(t *testing.T) {
@@ -305,7 +304,7 @@ func Test_UnschedulablePodWithDisAllowDegradedMode(t *testing.T) {
 	req := testSetup.request
 	testStatefulset := testSetup.statefulsetWithOutPVC
 
-	client := fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, testSetup.secret, testStatefulset, testSetup.unSchedulablePod)
+	client := fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, testSetup.customizationCR, testSetup.secret, testStatefulset, testSetup.unSchedulablePod)
 	nilSearchOperator := SearchOperatorReconciler{client, log, testSetup.scheme}
 	var err error
 
@@ -313,26 +312,35 @@ func Test_UnschedulablePodWithDisAllowDegradedMode(t *testing.T) {
 	err = client.Get(context.TODO(), req.NamespacedName, instance)
 	assert.Nil(t, err, "Expected search Operator to be created. Got error: %v", err)
 
-	//Set persistence to true in operator - this should cause statefulset to fall back to empty dir since we don't have PVC
-	//instance.Spec.Persistence = true
-	//Set allowDegradedMode to false in operator - this should cause statefulset to fall back to empty dir since we don't have PVC
-	//instance.Spec.AllowDegradeMode = false
-	err = client.Update(context.TODO(), instance)
+	//Set persistence to true, FallbackToEmptyDir to false in customizationCR - this should cause statefulset to try to fall back to empty dir since we don't have PVC
+	persistence := true
+	testSetup.customizationCR.Spec.Persistence = &persistence
+	allowDegrade := false
+	testSetup.customizationCR.Spec.FallbackToEmptyDir = &allowDegrade
+	err = client.Update(context.TODO(), testSetup.customizationCR)
 	_, err = nilSearchOperator.Reconcile(req)
+
 	assert.NotNil(t, err, "Expected error to be not nil. Got nil.")
 	assert.Equal(t, "Redisgraph Pod not running", err.Error(), "Expected Redisgraph Pod not running error. Got %v", err)
+	err = client.Get(context.TODO(), req.NamespacedName, instance)
+	assert.Equal(t, statusFailedUsingPVC, instance.Status.PersistenceStatus, "Search Operator does not have status as expected.")
 }
 
 func TestUpdateCR(t *testing.T) {
 	testSetup := commonSetup()
 	client := fake.NewFakeClientWithScheme(testSetup.scheme)
 	var err error
+	// func updateCRs(kclient client.Client, operatorCR *searchv1alpha1.SearchOperator, status string, customizationCR *searchv1alpha1.SearchCustomization, persistence bool, storageClass string, storageSize string, customValuesInuse bool) error {
 
-	err = updateCR(client, testSetup.srchOperator, "status")
+	err = updateCRs(client, testSetup.srchOperator, "status", testSetup.customizationCR, false, "", "10G", true)
 	assert.True(t, errors.IsNotFound(err), "Expected Not Found error. Got %v", err.Error())
 
 	client = fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator)
-	err = updateCR(client, testSetup.srchOperator, "status")
+	err = updateCRs(client, testSetup.srchOperator, "status", testSetup.customizationCR, false, "", "10G", true)
+	assert.True(t, errors.IsNotFound(err), "Expected Not Found error. Got %v", err.Error())
+
+	client = fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, testSetup.customizationCR)
+	err = updateCRs(client, testSetup.srchOperator, "status", testSetup.customizationCR, false, "", "10G", true)
 	assert.Nil(t, err, "Expected Nil. Got error: %v", err)
 }
 
@@ -392,4 +400,12 @@ func createFakeRedisGraphPod(namespace string, persistence, schedulable bool) *c
 	volSource = corev1.VolumeSource{EmptyDir: &emptyDirVolSource}
 	return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Labels: labels}, Spec: corev1.PodSpec{Volumes: []corev1.Volume{{VolumeSource: volSource}}, Containers: []corev1.Container{{Image: image}}}, Status: status}
 
+}
+
+func createFakeSearchCustomizationCR(namespace string, persistence, fallbackToEmptyDir bool) *searchv1alpha1.SearchCustomization {
+	return &searchv1alpha1.SearchCustomization{TypeMeta: metav1.TypeMeta{
+		APIVersion: searchv1alpha1.GroupVersion.String(),
+		Kind:       "SearchCustomization"},
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "searchcustomization"},
+		Spec:       searchv1alpha1.SearchCustomizationSpec{Persistence: &persistence}}
 }

@@ -120,6 +120,8 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		}
 		r.Log.Info(fmt.Sprintf("Storage %s", storageSize))
 	}
+	log.Info("custom Values In use? ", customValuesInuse)
+	log.Info("persistence? ", persistence, " storageClass? ", storageClass, " storageSize? ", storageSize, " fallBackToEmptyDir? ", allowdegrade)
 
 	// Create secret if not found
 	err = setupSecret(r.Client, instance, r.Scheme)
@@ -469,7 +471,7 @@ func updateCustomizationCR(kclient client.Client, cr *searchv1alpha1.SearchCusto
 		log.Error(err, fmt.Sprintf("Failed to update %s/%s status ", cr.Namespace, cr.Name))
 		return err
 	} else {
-		log.Info(fmt.Sprintf("Updated CR status with custom persistence %s  ", cr.Status.Persistence))
+		log.Info(fmt.Sprintf("Updated CR status with custom persistence %t ", cr.Status.Persistence))
 	}
 	return nil
 }
