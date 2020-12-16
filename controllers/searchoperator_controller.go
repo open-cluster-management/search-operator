@@ -274,8 +274,7 @@ func getStatefulSet(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.Volume
 			Name:      statefulSetName,
 			Namespace: cr.Namespace,
 			Annotations: map[string]string{
-				"owner":            "search-operator",
-				"openshift.io/scc": "anyuid",
+				"owner": "search-operator",
 			},
 		},
 		Spec: appv1.StatefulSetSpec{
