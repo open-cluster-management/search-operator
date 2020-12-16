@@ -44,7 +44,6 @@ type SearchOperatorReconciler struct {
 }
 
 const (
-	pvcName                   = "redisgraph-pvc"
 	appName                   = "search"
 	component                 = "redisgraph"
 	statefulSetName           = "search-redisgraph"
@@ -59,6 +58,7 @@ const (
 )
 
 var (
+	pvcName              = "redisgraph-pvc-default"
 	waitSecondsForPodChk = 180 //Wait for 3 minutes
 	log                  = logf.Log.WithName("searchoperator")
 	persistence          = true
@@ -115,6 +115,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		//set the  user provided values
 		customValuesInuse = true
 		storageClass = custom.Spec.StorageClass
+		pvcName = "redisgraph-pvc-" + storageClass
 		if custom.Spec.StorageSize != "" {
 			storageSize = custom.Spec.StorageSize
 		}
