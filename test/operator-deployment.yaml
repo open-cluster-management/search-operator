@@ -20,7 +20,7 @@ spec:
         - --enable-leader-election
         command:
         - /manager  
-        image: quay.io/xrajesh/search-operator:6.0
+        image: {{ OPERATOR_IMAGE }}
         imagePullPolicy: IfNotPresent
         name: search-operator
         env:

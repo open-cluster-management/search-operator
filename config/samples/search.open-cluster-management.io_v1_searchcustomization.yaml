@@ -3,5 +3,4 @@ kind: SearchCustomization
 metadata:
   name: searchcustomization
 spec:
-  # Add fields here
-  persistence: false
+  persistence: true
