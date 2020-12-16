@@ -121,7 +121,8 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		r.Log.Info(fmt.Sprintf("Storage %s", storageSize))
 	}
 	log.Info("custom Values In use? ", customValuesInuse)
-	log.Info("persistence? ", persistence, " storageClass? ", storageClass, " storageSize? ", storageSize, " fallBackToEmptyDir? ", allowdegrade)
+	log.Info("persistence? ", persistence, " storageClass? ", storageClass,
+		" storageSize? ", storageSize, " fallBackToEmptyDir? ", allowdegrade)
 
 	// Create secret if not found
 	err = setupSecret(r.Client, instance, r.Scheme)
@@ -152,7 +153,8 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		podReady := isPodRunning(r.Client, instance, true, waitSecondsForPodChk)
 		if podReady {
 			//Write Status
-			err := updateCRs(r.Client, instance, statusUsingPVC, custom, persistence, storageClass, storageSize, customValuesInuse)
+			err := updateCRs(r.Client, instance, statusUsingPVC,
+				custom, persistence, storageClass, storageSize, customValuesInuse)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
@@ -258,7 +260,8 @@ func (r *SearchOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		})
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&searchv1alpha1.SearchOperator{}).
-		Watches(&source.Kind{Type: &searchopenclustermanagementiov1.SearchCustomization{}}, &handler.EnqueueRequestsFromMapFunc{ToRequests: searchCustomizationFn}).
+		Watches(&source.Kind{Type: &searchopenclustermanagementiov1.SearchCustomization{}},
+			&handler.EnqueueRequestsFromMapFunc{ToRequests: searchCustomizationFn}).
 		WithEventFilter(pred).
 		Complete(r)
 }
@@ -416,7 +419,9 @@ func getStatefulSet(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.Volume
 		},
 	}
 }
-func updateCRs(kclient client.Client, operatorCR *searchv1alpha1.SearchOperator, status string, customizationCR *searchv1alpha1.SearchCustomization, persistence bool, storageClass string, storageSize string, customValuesInuse bool) error {
+func updateCRs(kclient client.Client, operatorCR *searchv1alpha1.SearchOperator, status string,
+	customizationCR *searchv1alpha1.SearchCustomization, persistence bool, storageClass string,
+	storageSize string, customValuesInuse bool) error {
 	var err error
 	err = updateOperatorCR(kclient, operatorCR, status)
 	if err != nil {
@@ -452,7 +457,8 @@ func updateOperatorCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, 
 	return nil
 }
 
-func updateCustomizationCR(kclient client.Client, cr *searchv1alpha1.SearchCustomization, persistence bool, storageClass string, storageSize string) error {
+func updateCustomizationCR(kclient client.Client, cr *searchv1alpha1.SearchCustomization,
+	persistence bool, storageClass string, storageSize string) error {
 	found := &searchv1alpha1.SearchCustomization{}
 	err := kclient.Get(context.TODO(), types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace}, found)
 	if err != nil {
