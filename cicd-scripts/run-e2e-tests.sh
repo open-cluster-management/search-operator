@@ -120,7 +120,8 @@ test_default_pvc() {
     echo -n "Applying redisgraph user secret : "  && kubectl apply -f ./test/redisgraph-user-secret.yaml
 	echo -n "Applying redisgraph tls secret : "  && kubectl apply -f ./test/redisgraph-tls-secret.yaml
 	echo -n "Creating pull secret for statefulset : " && kubectl create secret docker-registry multiclusterhub-operator-pull-secret --docker-server=quay.io --docker-username=$DOCKER_USER --docker-password=$DOCKER_PASS 
-
+    
+	$sed_command "s~{{ OPERATOR_IMAGE }}~$IMAGE_NAME~g" ./test/operator-deployment.yaml
 	echo -n "Applying search operator deployment: "  && kubectl apply -f ./test/operator-deployment.yaml
 	echo "Waiting 2 minutes for the redisgraph pod to get Ready... " && sleep 120
 	count=0
@@ -144,8 +145,9 @@ test_default_pvc() {
 }
 test_no_persistence() {
 	echo "=====Update  search-operator to persistence false====="
-	echo -n "Patch searchoperator: " && kubectl patch searchoperator searchoperator -p '{"spec":{"persistence":false}}'  --type='merge'
-	echo -n "Delete PVC : " && kubectl delete pvc redisgraph-pvc
+	echo -n "Applying sample search customization: "  && kubectl apply -f ./config/samples/search.open-cluster-management.io_v1_searchcustomization.yaml
+	echo -n "Patch searchcustomization: " && kubectl patch searchcustomization searchcustomization -p '{"spec":{"persistence":false}}'  --type='merge'
+	echo -n "Delete PVC : " && kubectl delete pvc redisgraph-pvc-default
 	echo "Waiting 2 minutes for the redisgraph pod to get Ready... " && sleep 120
     count=0
 	while true ; do
@@ -165,10 +167,20 @@ test_no_persistence() {
 		 exit 1
 	  fi
 	done
+	SEARCHCUSTOMIZATIONS1=$(kubectl get searchcustomization searchcustomization -n open-cluster-management -o json | jq '.status.persistence')
+	SEARCHCUSTOMIZATIONS2=$(kubectl get searchcustomization searchcustomization -n open-cluster-management -o json | jq '.status.storageClass')
+	SEARCHCUSTOMIZATIONS3=$(kubectl get searchcustomization searchcustomization -n open-cluster-management -o json | jq '.status.storageSize')
+	if [[ "$SEARCHCUSTOMIZATIONS1" == "false" && "$SEARCHCUSTOMIZATIONS2" == "\"\"" && "$SEARCHCUSTOMIZATIONS3" == "\"\"" ]]
+	  then
+	     echo "STATUS verfied in  SearchCustomization"
+	  else
+	     echo "STATUS Verfication Failed in SearchCustomization"
+		 exit 1	 
+	fi
 }
 test_degraded_mode() {
-	echo "=====Update  search-operator to persistence true and invalid storage class====="
-	echo -n "Patch searchoperator: " && kubectl patch searchoperator searchoperator -p '{"spec":{"persistence":true,"storageclass": "test"}}'  --type='merge'
+	echo "=====Update  searchcustomization to persistence true and invalid storage class====="
+	echo -n "Patch searchcustomization: " && kubectl patch searchcustomization searchcustomization -p '{"spec":{"persistence":true,"storageClass": "test"}}'  --type='merge'
 	echo "Waiting 4 minutes for the redisgraph pod to get Ready... " && sleep 240
 	count=0
 	while true ; do
@@ -178,7 +190,17 @@ test_degraded_mode() {
 	  if [[ "$SEARCHOPERATOR" == "\"Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim\"" ]]
 	  then
 	     echo "SUCCESS - Redisgraph Pod Ready"
-		 exit 0
+		 SEARCHCUSTOMIZATIONS1=$(kubectl get searchcustomization searchcustomization -n open-cluster-management -o json | jq '.status.persistence')
+	     SEARCHCUSTOMIZATIONS2=$(kubectl get searchcustomization searchcustomization -n open-cluster-management -o json | jq '.status.storageClass')
+	     SEARCHCUSTOMIZATIONS3=$(kubectl get searchcustomization searchcustomization -n open-cluster-management -o json | jq '.status.storageSize')
+	     if [[ "$SEARCHCUSTOMIZATIONS1" == "false" && "$SEARCHCUSTOMIZATIONS2" == "\"\"" && "$SEARCHCUSTOMIZATIONS3" == "\"\"" ]]
+	       then
+	           echo "STATUS verfied in  SearchCustomization"
+			   exit 0
+	       else
+	           echo "STATUS verfication Failed in SearchCustomization"
+		       exit 1	 
+	     fi
 	  fi
 	  echo "No Sucess yet ..Sleeping for 1s"
 	  sleep 1s
