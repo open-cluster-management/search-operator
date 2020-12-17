@@ -28,9 +28,9 @@ spec:
             internal value, and may reject unrecognized values. See the Kubernetes community repository for more info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
           type: string
         kind:
-          description: 'Kind is a string value representing the REST resource this
-            object represents. Servers may infer this from the endpoint the client
-            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+          description: 'Kind is a string value representing the REST resource that
+            this object represents. Servers may infer this from the endpoint where the client
+            submits requests to. This object cannot be updated. See the Kubernetes community repository for more info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
           type: string
         metadata:
           type: object
