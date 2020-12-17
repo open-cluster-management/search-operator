@@ -20,12 +20,12 @@ spec:
   validation:
     openAPIV3Schema:
       description: SearchCustomization is the schema for the search customizations
-        API
+        API.
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
             of an object. Servers should convert recognized schemas to the latest
-            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            internal value, and may reject unrecognized values. See the Kubernetes community repository for more info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
           type: string
         kind:
           description: 'Kind is a string value representing the REST resource this
@@ -36,30 +36,30 @@ spec:
           type: object
         spec:
           description: SearchCustomizationSpec defines the desired state of SearchCustomization
-            properties
+            properties.
           properties:
             fallbackToEmptyDir:
               description: If set to true and a PVC cannot be bound to the search-redisgraph
                 pod, then the controller automatically sets up EmptyDir volume for
-                the search-redisgraph pod
+                the search-redisgraph pod.
               type: boolean
             persistence:
-              description: If set to true, then a PVC is created on the storageclass
-                that is provided. If there is no storageClass specified, default storageclass
+              description: If set to true, then a PVC is created on the storageClass
+                that is provided. If there is no storageClass specified, default storageClass
                 is used to persist Redisgraph data.
               type: boolean
             storageClass:
-              description: If specified this storage class is used, else default storage
-                class will be used by kubernetes. If storageclass is specified, persistence
+              description: If specified this storageClass is used, otherwise the default storage
+                class is used by Kubernetes. If storageclass is specified, persistence
                 must be set to true.
               type: string
             storageSize:
-              description: Size of the PVC which will be used by search-redisgraph
+              description: Size of the PVC which is used by search-redisgraph pod 
                 for persistence
               type: string
           type: object
         status:
-          description: SearchCustomizationStatus defines the observed state of SearchCustomization
+          description: SearchCustomizationStatus defines the observed state of SearchCustomization.
           properties:
             persistence:
               type: boolean
