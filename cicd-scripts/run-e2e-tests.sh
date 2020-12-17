@@ -21,8 +21,15 @@ deploy() {
 	test_default_pvc
 	test_no_persistence
 	test_degraded_mode
+	revert_file_change
 	#delete_kind_hub	
-	#delete_command_binaries	
+	#delete_command_binaries
+}
+
+revert_file_change(){
+	# change the image name back to OPERATOR_IMAGE in operator deployment for next run
+	echo "After test process: Reverting file changes"
+	sed -i '-e' "s~$IMAGE_NAME~{{ OPERATOR_IMAGE }}~g" ./test/operator-deployment.yaml
 }
 
 setup_kubectl_and_oc_command() {
