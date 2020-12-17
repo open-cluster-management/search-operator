@@ -58,7 +58,7 @@ const (
 )
 
 var (
-	pvcName              = "redisgraph-pvc-default"
+	pvcName              = "acm-search-redisgraph-0"
 	waitSecondsForPodChk = 180 //Wait for 3 minutes
 	log                  = logf.Log.WithName("searchoperator")
 	persistence          = true
@@ -115,7 +115,9 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		//set the  user provided values
 		customValuesInuse = true
 		storageClass = custom.Spec.StorageClass
-		pvcName = "redisgraph-pvc-" + storageClass
+		if storageClass != "" {
+			pvcName = storageClass + "-search-redisgraph-0"
+		}
 		if custom.Spec.StorageSize != "" {
 			storageSize = custom.Spec.StorageSize
 		}
