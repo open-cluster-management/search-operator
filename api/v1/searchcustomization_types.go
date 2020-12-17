@@ -23,7 +23,7 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// SearchCustomizationSpec defines the desired state of SearchCustomization
+// SearchCustomizationSpec defines the desired state of SearchCustomization properties
 type SearchCustomizationSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
@@ -37,13 +37,13 @@ type SearchCustomizationSpec struct {
 	// +optional
 	StorageSize string `json:"storageSize,omitempty"`
 
-	// If true, then a PVC is created on the stroageclass provided (if none specified ,
-	//default storageclass)is used to persist redis data .
+	// If set to true, then a PVC is created on the storageclass that is provided.
+	// If there is no storageClass specified, default storageclass is used to persist Redisgraph data.
 	// +optional
 	Persistence *bool `json:"persistence,omitempty"`
 
-	// If true, then whenever PVC cannot be Bound to search-redisgraph
-	//pod then controller automatically sets up EmptyDir volume for search-redisgraph
+	// If set to true and a PVC cannot be bound to the search-redisgraph
+	// pod, then the controller automatically sets up EmptyDir volume for the search-redisgraph pod
 	// +optional
 	FallbackToEmptyDir *bool `json:"fallbackToEmptyDir,omitempty"`
 }
@@ -60,7 +60,7 @@ type SearchCustomizationStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// SearchCustomization is the Schema for the searchcustomizations API
+// SearchCustomization is the schema for the search customizations API
 type SearchCustomization struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
