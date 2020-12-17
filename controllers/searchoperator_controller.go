@@ -121,8 +121,8 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		}
 		r.Log.Info(fmt.Sprintf("Storage %s", storageSize))
 	}
-	log.Info("custom Values In use? ", customValuesInuse)
-	log.Info("persistence? ", persistence, " storageClass? ", storageClass,
+	r.Log.Info("Checking if customization CR is created..", " Custom Values In use? ", customValuesInuse)
+	r.Log.Info("Values in use: ", "persistence? ", persistence, " storageClass? ", storageClass,
 		" storageSize? ", storageSize, " fallBackToEmptyDir? ", allowdegrade)
 
 	// Create secret if not found
