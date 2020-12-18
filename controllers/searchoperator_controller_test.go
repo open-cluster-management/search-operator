@@ -246,7 +246,9 @@ func Test_FallBacktoEmptyDirStatefulset(t *testing.T) {
 
 	//Set persistence to true in customizationCR - this should cause statefulset to fall back to empty dir since we don't have PVC
 	persistence := true
+	fallbackToEmptyDir := true //defaults to false in customizationCR
 	testSetup.customizationCR.Spec.Persistence = &persistence
+	testSetup.customizationCR.Spec.FallbackToEmptyDir = &fallbackToEmptyDir
 	err = client.Create(context.TODO(), testSetup.customizationCR)
 
 	_, err = nilSearchOperator.Reconcile(req)
@@ -407,5 +409,5 @@ func createFakeSearchCustomizationCR(namespace string, persistence, fallbackToEm
 		APIVersion: searchv1alpha1.GroupVersion.String(),
 		Kind:       "SearchCustomization"},
 		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "searchcustomization"},
-		Spec:       searchv1alpha1.SearchCustomizationSpec{Persistence: &persistence}}
+		Spec:       searchv1alpha1.SearchCustomizationSpec{Persistence: &persistence, StorageSize: "1Gi"}}
 }
