@@ -105,6 +105,8 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	} else {
 		if custom.Spec.FallbackToEmptyDir != nil {
 			allowdegrade = *custom.Spec.FallbackToEmptyDir
+		} else {
+			allowdegrade = false
 		}
 		if custom.Spec.Persistence != nil {
 			persistence = *custom.Spec.Persistence
@@ -232,10 +234,7 @@ func (r *SearchOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	watchNamespace := os.Getenv("WATCH_NAMESPACE")
 	pred := predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
-			if e.Meta.GetNamespace() == watchNamespace {
-				return true
-			}
-			return false
+			return e.Meta.GetNamespace() == watchNamespace
 		},
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			if e.MetaNew.GetNamespace() == watchNamespace &&
@@ -261,10 +260,12 @@ func (r *SearchOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 				}},
 			}
 		})
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&searchv1alpha1.SearchOperator{}).
 		Watches(&source.Kind{Type: &searchopenclustermanagementiov1.SearchCustomization{}},
 			&handler.EnqueueRequestsFromMapFunc{ToRequests: searchCustomizationFn}).
+		Watches(&source.Kind{Type: &appv1.StatefulSet{}}, &handler.EnqueueRequestForOwner{OwnerType: &searchv1alpha1.SearchOperator{}, IsController: true}).
 		WithEventFilter(pred).
 		Complete(r)
 }

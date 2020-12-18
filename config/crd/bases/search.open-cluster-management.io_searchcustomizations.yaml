@@ -43,11 +43,13 @@ spec:
                 pod, then the controller automatically sets up EmptyDir volume for
                 the search-redisgraph pod.
               type: boolean
+              pattern: "(true|false)"
             persistence:
               description: If set to true, then a PVC is created on the storageClass
                 that is provided. If there is no storageClass specified, default storageClass
                 is used to persist Redisgraph data.
               type: boolean
+              pattern: "(true|false)"
             storageClass:
               description: If specified this storageClass is used, otherwise the default
                 storageClass is used by Kubernetes. If storageClass is specified,
@@ -56,6 +58,7 @@ spec:
             storageSize:
               description: Size of the PVC which is used by search-redisgraph pod.
               type: string
+              pattern: "^[1-9](Gi)|^[1-9][0-9](Gi)"
           type: object
         status:
           description: SearchCustomizationStatus defines the observed state of SearchCustomization.

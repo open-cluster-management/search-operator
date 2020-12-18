@@ -154,7 +154,7 @@ test_no_persistence() {
 	echo "=====Update  search-operator to persistence false====="
 	echo -n "Applying sample search customization: "  && kubectl apply -f ./config/samples/search.open-cluster-management.io_v1_searchcustomization.yaml
 	echo -n "Patch searchcustomization: " && kubectl patch searchcustomization searchcustomization -p '{"spec":{"persistence":false}}'  --type='merge'
-	echo -n "Delete PVC : " && kubectl delete pvc redisgraph-pvc-default
+	echo -n "Delete PVC : " && kubectl delete pvc acm-search-redisgraph-0
 	echo "Waiting 2 minutes for the redisgraph pod to get Ready... " && sleep 120
     count=0
 	while true ; do
