@@ -19,8 +19,7 @@ spec:
     status: {}
   validation:
     openAPIV3Schema:
-      description: SearchCustomization is the schema for the search customizations
-        API
+      description: SearchCustomization is the schema for the search customizations API.
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
