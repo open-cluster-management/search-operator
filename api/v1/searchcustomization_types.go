@@ -60,7 +60,7 @@ type SearchCustomizationStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// SearchCustomization is the schema for the search customizations API
+// SearchCustomization is the schema for the search customizations API.
 type SearchCustomization struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -71,7 +71,7 @@ type SearchCustomization struct {
 
 // +kubebuilder:object:root=true
 
-// SearchCustomizationList contains a list of SearchCustomization
+// SearchCustomizationList contains a list of SearchCustomization.
 type SearchCustomizationList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
