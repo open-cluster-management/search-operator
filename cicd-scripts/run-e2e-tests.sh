@@ -202,7 +202,7 @@ test_degraded_mode() {
 	     SEARCHCUSTOMIZATIONS3=$(kubectl get searchcustomization searchcustomization -n open-cluster-management -o json | jq '.status.storageSize')
 	     if [[ "$SEARCHCUSTOMIZATIONS1" == "false" && "$SEARCHCUSTOMIZATIONS2" == "\"\"" && "$SEARCHCUSTOMIZATIONS3" == "\"\"" ]]
 	       then
-	           echo "STATUS verfied in  SearchCustomization"
+	           echo "STATUS verified in  SearchCustomization"
 			   exit 0
 	       else
 	           echo "STATUS verfication Failed in SearchCustomization"
@@ -218,4 +218,5 @@ test_degraded_mode() {
 	  fi
 	done 
 }
+
 deploy

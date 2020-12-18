@@ -23,32 +23,32 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// SearchCustomizationSpec defines the desired state of SearchCustomization properties
+// SearchCustomizationSpec defines the desired state of SearchCustomization properties.
 type SearchCustomizationSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// If specified this storage class is used, else default storage class will be
-	//used by kubernetes. If storageclass is specified, persistence must be set to true.
+	// If specified this storageClass is used, otherwise the default storageClass
+	// is used by Kubernetes. If storageClass is specified, persistence must be set to true.
 	// +optional
 	StorageClass string `json:"storageClass,omitempty"`
 
-	// Size of the PVC which will be used by search-redisgraph for persistence
+	// Size of the PVC which is used by search-redisgraph pod.
 	// +optional
 	StorageSize string `json:"storageSize,omitempty"`
 
-	// If set to true, then a PVC is created on the storageclass that is provided.
-	// If there is no storageClass specified, default storageclass is used to persist Redisgraph data.
+	// If set to true, then a PVC is created on the storageClass that is provided.
+	// If there is no storageClass specified, default storageClass is used to persist Redisgraph data.
 	// +optional
 	Persistence *bool `json:"persistence,omitempty"`
 
 	// If set to true and a PVC cannot be bound to the search-redisgraph
-	// pod, then the controller automatically sets up EmptyDir volume for the search-redisgraph pod
+	// pod, then the controller automatically sets up EmptyDir volume for the search-redisgraph pod.
 	// +optional
 	FallbackToEmptyDir *bool `json:"fallbackToEmptyDir,omitempty"`
 }
 
-// SearchCustomizationStatus defines the observed state of SearchCustomization
+// SearchCustomizationStatus defines the observed state of SearchCustomization.
 type SearchCustomizationStatus struct {
 	StorageClass string `json:"storageClass"`
 
