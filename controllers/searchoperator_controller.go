@@ -14,7 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/go-logr/logr"
-	searchopenclustermanagementiov1 "github.com/open-cluster-management/search-operator/api/v1"
 	searchv1alpha1 "github.com/open-cluster-management/search-operator/api/v1"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -27,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -65,6 +63,7 @@ var (
 	allowdegrade         = true
 	storageClass         = ""
 	storageSize          = "10Gi"
+	namespace            = os.Getenv("WATCH_NAMESPACE")
 )
 
 func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
@@ -130,7 +129,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		" storageSize? ", storageSize, " fallBackToEmptyDir? ", allowdegrade)
 
 	// Create secret if not found
-	err = setupSecret(r.Client, instance, r.Scheme)
+	err = r.setupSecret(r.Client, instance)
 	if err != nil {
 		// Error setting up secret - requeue the request.
 		return ctrl.Result{}, err
@@ -142,20 +141,20 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	r.Log.Info(fmt.Sprintf("Config in  Use Persistence/AllowDegrade %t/%t", persistence, allowdegrade))
 	if persistence {
 		//If running PVC deployment nothing to do
-		if isPodRunning(r.Client, instance, true, 1) && persistenceStatus == statusUsingPVC {
+		if isStatefulSetAvailable(r.Client) && isPodRunning(r.Client, true, 1) && persistenceStatus == statusUsingPVC {
 			return ctrl.Result{}, nil
 		}
 		//If running degraded deployment AND AllowDegradeMode is set
-		if isPodRunning(r.Client, instance, false, 1) && allowdegrade &&
+		if isStatefulSetAvailable(r.Client) && isPodRunning(r.Client, false, 1) && allowdegrade &&
 			persistenceStatus == statusDegradedEmptyDir {
 			return ctrl.Result{}, nil
 		}
-		pvcError := setupVolume(r.Client, instance)
+		pvcError := setupVolume(r.Client)
 		if pvcError != nil {
 			return ctrl.Result{}, pvcError
 		}
-		executeDeployment(r.Client, instance, true, r.Scheme)
-		podReady := isPodRunning(r.Client, instance, true, waitSecondsForPodChk)
+		r.executeDeployment(r.Client, instance, true)
+		podReady := isPodRunning(r.Client, true, waitSecondsForPodChk)
 		if podReady {
 			//Write Status
 			err := updateCRs(r.Client, instance, statusUsingPVC,
@@ -167,16 +166,16 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		//If Pod cannot be scheduled rollback to EmptyDir if AllowDegradeMode is set
 		if !podReady && allowdegrade {
 			r.Log.Info("Degrading Redisgraph deployment to use empty dir.")
-			err := deleteRedisStatefulSet(r.Client, instance.Namespace)
+			err := deleteRedisStatefulSet(r.Client)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
-			err = deletePVC(r.Client, instance.Namespace)
+			err = deletePVC(r.Client)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
-			executeDeployment(r.Client, instance, false, r.Scheme)
-			if isPodRunning(r.Client, instance, false, waitSecondsForPodChk) {
+			r.executeDeployment(r.Client, instance, false)
+			if isPodRunning(r.Client, false, waitSecondsForPodChk) {
 				//Write Status
 				err := updateCRs(r.Client, instance, statusDegradedEmptyDir, custom, false, "", "", customValuesInuse)
 				if err != nil {
@@ -204,13 +203,13 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			return ctrl.Result{}, fmt.Errorf(redisNotRunning)
 		}
 	} else {
-		if !persistence && isPodRunning(r.Client, instance, false, 1) &&
+		if !persistence && isStatefulSetAvailable(r.Client) && isPodRunning(r.Client, false, 1) &&
 			persistenceStatus == statusUsingNodeEmptyDir {
 			return ctrl.Result{}, nil
 		}
 		r.Log.Info("Using Empty dir Deployment")
-		executeDeployment(r.Client, instance, false, r.Scheme)
-		if isPodRunning(r.Client, instance, false, waitSecondsForPodChk) {
+		r.executeDeployment(r.Client, instance, false)
+		if isPodRunning(r.Client, false, waitSecondsForPodChk) {
 			//Write Status
 			err := updateCRs(r.Client, instance, statusUsingNodeEmptyDir, custom, false, "", "", customValuesInuse)
 			if err != nil {
@@ -238,14 +237,14 @@ func (r *SearchOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		},
 		UpdateFunc: func(e event.UpdateEvent) bool {
 			if e.MetaNew.GetNamespace() == watchNamespace &&
-				e.MetaNew.GetResourceVersion() != e.MetaOld.GetResourceVersion() {
+				e.MetaNew.GetGeneration() != e.MetaOld.GetGeneration() {
 				return true
 			}
 			return false
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
 			if e.Meta.GetNamespace() == watchNamespace {
-				return e.DeleteStateUnknown
+				return !e.DeleteStateUnknown
 			}
 			return false
 		},
@@ -263,9 +262,10 @@ func (r *SearchOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&searchv1alpha1.SearchOperator{}).
-		Watches(&source.Kind{Type: &searchopenclustermanagementiov1.SearchCustomization{}},
+		Owns(&appv1.StatefulSet{}).
+		Owns(&corev1.Secret{}).
+		Watches(&source.Kind{Type: &searchv1alpha1.SearchCustomization{}},
 			&handler.EnqueueRequestsFromMapFunc{ToRequests: searchCustomizationFn}).
-		Watches(&source.Kind{Type: &appv1.StatefulSet{}}, &handler.EnqueueRequestForOwner{OwnerType: &searchv1alpha1.SearchOperator{}, IsController: true}).
 		WithEventFilter(pred).
 		Complete(r)
 }
@@ -274,15 +274,12 @@ func int32Ptr(i int32) *int32 { return &i }
 
 func int64Ptr(i int64) *int64 { return &i }
 
-func getStatefulSet(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.VolumeSource) *appv1.StatefulSet {
+func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.VolumeSource) *appv1.StatefulSet {
 	bool := false
-	return &appv1.StatefulSet{
+	sset := &appv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      statefulSetName,
 			Namespace: cr.Namespace,
-			Annotations: map[string]string{
-				"owner": "search-operator",
-			},
 		},
 		Spec: appv1.StatefulSetSpec{
 			Replicas: int32Ptr(1),
@@ -422,6 +419,10 @@ func getStatefulSet(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.Volume
 			},
 		},
 	}
+	if err := ctrl.SetControllerReference(cr, sset, r.Scheme); err != nil {
+		log.Info("Cannot set statefulSet OwnerReference", err.Error())
+	}
+	return sset
 }
 func updateCRs(kclient client.Client, operatorCR *searchv1alpha1.SearchOperator, status string,
 	customizationCR *searchv1alpha1.SearchCustomization, persistence bool, storageClass string,
@@ -485,7 +486,7 @@ func updateCustomizationCR(kclient client.Client, cr *searchv1alpha1.SearchCusto
 	return nil
 }
 
-func updateRedisStatefulSet(client client.Client, deployment *appv1.StatefulSet, namespace string) {
+func updateRedisStatefulSet(client client.Client, deployment *appv1.StatefulSet) {
 	found := &appv1.StatefulSet{}
 	err := client.Get(context.TODO(), types.NamespacedName{Name: statefulSetName, Namespace: namespace}, found)
 	if err != nil {
@@ -514,7 +515,7 @@ func updateRedisStatefulSet(client client.Client, deployment *appv1.StatefulSet,
 		}
 	}
 }
-func deleteRedisStatefulSet(client client.Client, namespace string) error {
+func deleteRedisStatefulSet(client client.Client) error {
 	statefulset := &appv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      statefulSetName,
@@ -531,7 +532,7 @@ func deleteRedisStatefulSet(client client.Client, namespace string) error {
 	return nil
 }
 
-func deletePVC(client client.Client, namespace string) error {
+func deletePVC(client client.Client) error {
 	pvc := &v1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pvcName,
@@ -548,12 +549,12 @@ func deletePVC(client client.Client, namespace string) error {
 	return nil
 }
 
-func getPVC(cr *searchv1alpha1.SearchOperator) *v1.PersistentVolumeClaim {
+func getPVC() *v1.PersistentVolumeClaim {
 	if storageClass != "" {
 		return &v1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      pvcName,
-				Namespace: cr.Namespace,
+				Namespace: namespace,
 			},
 			Spec: v1.PersistentVolumeClaimSpec{
 				AccessModes: []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
@@ -569,7 +570,7 @@ func getPVC(cr *searchv1alpha1.SearchOperator) *v1.PersistentVolumeClaim {
 	return &v1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pvcName,
-			Namespace: cr.Namespace,
+			Namespace: namespace,
 		},
 		Spec: v1.PersistentVolumeClaimSpec{
 			AccessModes: []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
@@ -583,10 +584,10 @@ func getPVC(cr *searchv1alpha1.SearchOperator) *v1.PersistentVolumeClaim {
 }
 
 //Remove PVC if you have one
-func setupVolume(client client.Client, cr *searchv1alpha1.SearchOperator) error {
+func setupVolume(client client.Client) error {
 	found := &v1.PersistentVolumeClaim{}
-	pvc := getPVC(cr)
-	err := client.Get(context.TODO(), types.NamespacedName{Name: pvcName, Namespace: cr.Namespace}, found)
+	pvc := getPVC()
+	err := client.Get(context.TODO(), types.NamespacedName{Name: pvcName, Namespace: namespace}, found)
 	logKeyPVCName := "PVC Name"
 	if err != nil && errors.IsNotFound(err) {
 		err = client.Create(context.TODO(), pvc)
@@ -622,24 +623,38 @@ func generatePass(length int) []byte {
 }
 
 // newRedisSecret returns a redisgraph-user-secret with the same name/namespace as the cr
-func newRedisSecret(cr *searchv1alpha1.SearchOperator) *corev1.Secret {
+func newRedisSecret(cr *searchv1alpha1.SearchOperator, scheme *runtime.Scheme) *corev1.Secret {
 	labels := map[string]string{
 		"app": "search",
 	}
 
-	return &corev1.Secret{
+	sec := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "redisgraph-user-secret",
-			Namespace: cr.Namespace,
+			Namespace: namespace,
 			Labels:    labels,
 		},
 		Data: map[string][]byte{
 			"redispwd": generatePass(16),
 		},
 	}
+	if err := ctrl.SetControllerReference(cr, sec, scheme); err != nil {
+		log.Info("Cannot set secret OwnerReference", err.Error())
+	}
+	return sec
 }
 
-func isPodRunning(kclient client.Client, cr *searchv1alpha1.SearchOperator, withPVC bool, waitSeconds int) bool {
+func isStatefulSetAvailable(kclient client.Client) bool {
+	//check if statefulset is present if not we can assume the pod is not running
+	found := &appv1.StatefulSet{}
+	err := kclient.Get(context.TODO(), types.NamespacedName{Name: statefulSetName, Namespace: namespace}, found)
+	if err != nil && errors.IsNotFound(err) {
+		return false
+	}
+	return true
+}
+
+func isPodRunning(kclient client.Client, withPVC bool, waitSeconds int) bool {
 	log.Info("Checking Redisgraph Pod Status...")
 	//Keep checking status until waitSeconds
 	// We assume its not running
@@ -688,8 +703,7 @@ func isReady(pod v1.Pod, withPVC bool) bool {
 	return false
 }
 
-func executeDeployment(client client.Client, cr *searchv1alpha1.SearchOperator, usePVC bool,
-	scheme *runtime.Scheme) *appv1.StatefulSet {
+func (r *SearchOperatorReconciler) executeDeployment(client client.Client, cr *searchv1alpha1.SearchOperator, usePVC bool) *appv1.StatefulSet {
 	var statefulSet *appv1.StatefulSet
 	emptyDirVolume := v1.VolumeSource{
 		EmptyDir: &v1.EmptyDirVolumeSource{},
@@ -700,25 +714,17 @@ func executeDeployment(client client.Client, cr *searchv1alpha1.SearchOperator, 
 		},
 	}
 	if !usePVC {
-		statefulSet = getStatefulSet(cr, emptyDirVolume)
+		statefulSet = r.getStatefulSet(cr, emptyDirVolume)
 	} else {
-		statefulSet = getStatefulSet(cr, pvcVolume)
+		statefulSet = r.getStatefulSet(cr, pvcVolume)
 	}
-	if err := controllerutil.SetControllerReference(cr, statefulSet, scheme); err != nil {
-		log.Info("Cannot set statefulSet OwnerReference", err.Error())
-	}
-	updateRedisStatefulSet(client, statefulSet, cr.Namespace)
+	updateRedisStatefulSet(client, statefulSet)
 	return statefulSet
 }
 
-func setupSecret(client client.Client, cr *searchv1alpha1.SearchOperator, scheme *runtime.Scheme) error {
+func (r *SearchOperatorReconciler) setupSecret(client client.Client, cr *searchv1alpha1.SearchOperator) error {
 	// Define a new Secret object
-	secret := newRedisSecret(cr)
-
-	// Set SearchService instance as the owner and controller
-	if err := controllerutil.SetControllerReference(cr, secret, scheme); err != nil {
-		return err
-	}
+	secret := newRedisSecret(cr, r.Scheme)
 	// Check if this Secret already exists
 	found := &corev1.Secret{}
 	err := client.Get(context.TODO(), types.NamespacedName{Name: secret.Name, Namespace: secret.Namespace}, found)
