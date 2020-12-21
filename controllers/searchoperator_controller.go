@@ -185,18 +185,27 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 				}
 			} else {
 				r.Log.Info("Unable to create Redisgraph Deployment in Degraded Mode")
-				//Write Status
-				updateCRs(r.Client, instance, statusFailedDegraded, custom, false, "", "", customValuesInuse)
-				deleteRedisStatefulSet(r.Client)
-				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+				//TODO: Move to a common function as these steps are common whenever redis pod is not running
+				//Write Status, delete statefulset and requeue
+				if err = updateCRs(r.Client, instance, statusFailedDegraded, custom, false, "", "", customValuesInuse); err != nil {
+					r.Log.Info("Error updating operator/customization status. ", "Error: ", err)
+				}
+				if err = deleteRedisStatefulSet(r.Client); err != nil {
+					r.Log.Info("Error deleting statefulset. ", "Error: ", err)
+				}
+				return ctrl.Result{RequeueAfter: 5 * time.Second}, fmt.Errorf(redisNotRunning)
 			}
 		}
 		if !podReady && !allowdegrade {
 			r.Log.Info("Unable to create Redisgraph Deployment using PVC ")
-			//Write Status ,and delete statefulset and requeue
-			updateCRs(r.Client, instance, statusFailedUsingPVC, custom, false, "", "", customValuesInuse)
-			deleteRedisStatefulSet(r.Client)
-			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+			//Write Status, delete statefulset and requeue
+			if err = updateCRs(r.Client, instance, statusFailedUsingPVC, custom, false, "", "", customValuesInuse); err != nil {
+				r.Log.Info("Error updating operator/customization status. ", "Error: ", err)
+			}
+			if err = deleteRedisStatefulSet(r.Client); err != nil {
+				r.Log.Info("Error deleting statefulset. ", "Error: ", err)
+			}
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, fmt.Errorf(redisNotRunning)
 		}
 	} else {
 		if !persistence && isStatefulSetAvailable(r.Client) && isPodRunning(r.Client, false, 1) &&
@@ -206,17 +215,21 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		r.Log.Info("Using Empty dir Deployment")
 		r.executeDeployment(r.Client, instance, false)
 		if isPodRunning(r.Client, false, waitSecondsForPodChk) {
-			//Write Status, and delete statefulset and requeue
+			//Write Status, if error - requeue
 			err := updateCRs(r.Client, instance, statusUsingNodeEmptyDir, custom, false, "", "", customValuesInuse)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
 		} else {
 			r.Log.Info("Unable to create Redisgraph Deployment")
-			//Write Status ,and delete statefulset and requeue
-			updateCRs(r.Client, instance, statusFailedNoPersistence, custom, false, "", "", customValuesInuse)
-			deleteRedisStatefulSet(r.Client)
-			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+			//Write Status, delete statefulset and requeue
+			if err = updateCRs(r.Client, instance, statusFailedNoPersistence, custom, false, "", "", customValuesInuse); err != nil {
+				r.Log.Info("Error updating operator/customization status. ", "Error: ", err)
+			}
+			if err = deleteRedisStatefulSet(r.Client); err != nil {
+				r.Log.Info("Error deleting statefulset. ", "Error: ", err)
+			}
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, fmt.Errorf(redisNotRunning)
 		}
 
 	}

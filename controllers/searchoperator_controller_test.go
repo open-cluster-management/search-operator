@@ -152,7 +152,7 @@ func Test_secretAlreadyExists(t *testing.T) {
 func Test_EmptyDirStatefulsetCreatedWithOwnerRef(t *testing.T) {
 	testSetup := commonSetup()
 
-	client := fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, testSetup.secret)
+	client := fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, testSetup.secret, testSetup.podWithOutPVC)
 	nilSearchOperator := SearchOperatorReconciler{client, log, testSetup.scheme}
 	var err error
 
@@ -293,12 +293,9 @@ func Test_UnschedulablePod(t *testing.T) {
 
 	foundStatefulset := &appv1.StatefulSet{}
 	err = client.Get(context.TODO(), types.NamespacedName{Name: testStatefulset.Name, Namespace: testStatefulset.Namespace}, foundStatefulset)
-	assert.Nil(t, err, "Expected Statefulset to be created. Got error: %v", err)
-	err = client.Get(context.TODO(), req.NamespacedName, instance)
+	assert.True(t, errors.IsNotFound(err), "Expected Not Found error. Got %v", err.Error())
 
-	assert.Equal(t, testStatefulset.Name, foundStatefulset.Name, "Statefulset is created with expected name.")
-	assert.Equal(t, testStatefulset.Namespace, foundStatefulset.Namespace, "Statefulset is created in expected namespace.")
-	assert.EqualValues(t, testStatefulset.Spec.Template.Spec, foundStatefulset.Spec.Template.Spec, "Statefulset is created with expected template spec.")
+	err = client.Get(context.TODO(), req.NamespacedName, instance)
 	assert.Equal(t, statusFailedDegraded, instance.Status.PersistenceStatus, "Search Operator does not have status as expected.")
 }
 
