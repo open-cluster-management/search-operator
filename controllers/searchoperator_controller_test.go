@@ -37,7 +37,7 @@ type testSetup struct {
 func commonSetup() testSetup {
 	testScheme := scheme.Scheme
 
-	namespace := "test-cluster"
+	namespace = "test-cluster"
 	searchv1alpha1.AddToScheme(testScheme)
 	testScheme.AddKnownTypes(corev1.SchemeGroupVersion, &corev1.Secret{})
 	waitSecondsForPodChk = 2
@@ -60,7 +60,7 @@ func commonSetup() testSetup {
 			Redisgraph_Resource: redisPodResource,
 		},
 	}
-	testSecret := newRedisSecret(testSearchOperator)
+	testSecret := newRedisSecret(testSearchOperator, testScheme)
 	req := reconcile.Request{
 		NamespacedName: types.NamespacedName{
 			Name:      "searchoperator",
@@ -68,8 +68,10 @@ func commonSetup() testSetup {
 		},
 	}
 	client := fake.NewFakeClientWithScheme(testScheme)
-	testStatefulsetWithPVC := executeDeployment(client, testSearchOperator, true, testScheme)
-	testStatefulsetWithOutPVC := executeDeployment(client, testSearchOperator, false, testScheme)
+	testSearchOperatorReconciler := SearchOperatorReconciler{client, log, testScheme}
+
+	testStatefulsetWithPVC := testSearchOperatorReconciler.executeDeployment(client, testSearchOperator, true)
+	testStatefulsetWithOutPVC := testSearchOperatorReconciler.executeDeployment(client, testSearchOperator, false)
 	// Set PVC Size to 10Gi
 	fakePVC := createFakeNamedPVC("10Gi", testSearchOperator.Namespace, nil)
 	fakePodWithPVC := createFakeRedisGraphPod(namespace, true, true)
