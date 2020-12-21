@@ -186,21 +186,17 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			} else {
 				r.Log.Info("Unable to create Redisgraph Deployment in Degraded Mode")
 				//Write Status
-				err := updateCRs(r.Client, instance, statusFailedDegraded, custom, false, "", "", customValuesInuse)
-				if err != nil {
-					return ctrl.Result{}, err
-				}
-				return ctrl.Result{}, fmt.Errorf(redisNotRunning)
+				updateCRs(r.Client, instance, statusFailedDegraded, custom, false, "", "", customValuesInuse)
+				deleteRedisStatefulSet(r.Client)
+				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 			}
 		}
 		if !podReady && !allowdegrade {
 			r.Log.Info("Unable to create Redisgraph Deployment using PVC ")
-			//Write Status
-			err := updateCRs(r.Client, instance, statusFailedUsingPVC, custom, false, "", "", customValuesInuse)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-			return ctrl.Result{}, fmt.Errorf(redisNotRunning)
+			//Write Status ,and delete statefulset and requeue
+			updateCRs(r.Client, instance, statusFailedUsingPVC, custom, false, "", "", customValuesInuse)
+			deleteRedisStatefulSet(r.Client)
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 		}
 	} else {
 		if !persistence && isStatefulSetAvailable(r.Client) && isPodRunning(r.Client, false, 1) &&
@@ -210,19 +206,17 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		r.Log.Info("Using Empty dir Deployment")
 		r.executeDeployment(r.Client, instance, false)
 		if isPodRunning(r.Client, false, waitSecondsForPodChk) {
-			//Write Status
+			//Write Status, and delete statefulset and requeue
 			err := updateCRs(r.Client, instance, statusUsingNodeEmptyDir, custom, false, "", "", customValuesInuse)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
 		} else {
 			r.Log.Info("Unable to create Redisgraph Deployment")
-			//Write Status
-			err := updateCRs(r.Client, instance, statusFailedNoPersistence, custom, false, "", "", customValuesInuse)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-			return ctrl.Result{}, fmt.Errorf(redisNotRunning)
+			//Write Status ,and delete statefulset and requeue
+			updateCRs(r.Client, instance, statusFailedNoPersistence, custom, false, "", "", customValuesInuse)
+			deleteRedisStatefulSet(r.Client)
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 		}
 
 	}
