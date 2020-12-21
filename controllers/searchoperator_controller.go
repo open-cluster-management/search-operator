@@ -177,7 +177,8 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			r.executeDeployment(r.Client, instance, false)
 			if isPodRunning(r.Client, false, waitSecondsForPodChk) {
 				//Write Status
-				err := updateCRs(r.Client, instance, statusDegradedEmptyDir, custom, false, "", "", customValuesInuse)
+				err := updateCRs(r.Client, instance, statusDegradedEmptyDir,
+					custom, false, "", "", customValuesInuse)
 				if err != nil {
 					return ctrl.Result{}, err
 				} else {
@@ -185,26 +186,15 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 				}
 			} else {
 				r.Log.Info("Unable to create Redisgraph Deployment in Degraded Mode")
-				//TODO: Move to a common function as these steps are common whenever redis pod is not running
 				//Write Status, delete statefulset and requeue
-				if err = updateCRs(r.Client, instance, statusFailedDegraded, custom, false, "", "", customValuesInuse); err != nil {
-					r.Log.Info("Error updating operator/customization status. ", "Error: ", err)
-				}
-				if err = deleteRedisStatefulSet(r.Client); err != nil {
-					r.Log.Info("Error deleting statefulset. ", "Error: ", err)
-				}
+				r.reconcileOnError(instance, statusFailedDegraded, custom, false, "", "", customValuesInuse)
 				return ctrl.Result{RequeueAfter: 5 * time.Second}, fmt.Errorf(redisNotRunning)
 			}
 		}
 		if !podReady && !allowdegrade {
 			r.Log.Info("Unable to create Redisgraph Deployment using PVC ")
 			//Write Status, delete statefulset and requeue
-			if err = updateCRs(r.Client, instance, statusFailedUsingPVC, custom, false, "", "", customValuesInuse); err != nil {
-				r.Log.Info("Error updating operator/customization status. ", "Error: ", err)
-			}
-			if err = deleteRedisStatefulSet(r.Client); err != nil {
-				r.Log.Info("Error deleting statefulset. ", "Error: ", err)
-			}
+			r.reconcileOnError(instance, statusFailedUsingPVC, custom, false, "", "", customValuesInuse)
 			return ctrl.Result{RequeueAfter: 5 * time.Second}, fmt.Errorf(redisNotRunning)
 		}
 	} else {
@@ -223,17 +213,25 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		} else {
 			r.Log.Info("Unable to create Redisgraph Deployment")
 			//Write Status, delete statefulset and requeue
-			if err = updateCRs(r.Client, instance, statusFailedNoPersistence, custom, false, "", "", customValuesInuse); err != nil {
-				r.Log.Info("Error updating operator/customization status. ", "Error: ", err)
-			}
-			if err = deleteRedisStatefulSet(r.Client); err != nil {
-				r.Log.Info("Error deleting statefulset. ", "Error: ", err)
-			}
+			r.reconcileOnError(instance, statusFailedNoPersistence, custom, false, "", "", customValuesInuse)
 			return ctrl.Result{RequeueAfter: 5 * time.Second}, fmt.Errorf(redisNotRunning)
 		}
 
 	}
 	return ctrl.Result{}, nil
+}
+
+func (r *SearchOperatorReconciler) reconcileOnError(instance *searchv1alpha1.SearchOperator, status string,
+	custom *searchv1alpha1.SearchCustomization, persistence bool, storageClass string,
+	storageSize string, customValuesInuse bool) {
+	var err error
+	if err = updateCRs(r.Client, instance, status, custom, false,
+		storageClass, storageSize, customValuesInuse); err != nil {
+		r.Log.Info("Error updating operator/customization status. ", "Error: ", err)
+	}
+	if err = deleteRedisStatefulSet(r.Client); err != nil {
+		r.Log.Info("Error deleting statefulset. ", "Error: ", err)
+	}
 }
 
 func (r *SearchOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -281,7 +279,8 @@ func int32Ptr(i int32) *int32 { return &i }
 
 func int64Ptr(i int64) *int64 { return &i }
 
-func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOperator, rdbVolumeSource v1.VolumeSource) *appv1.StatefulSet {
+func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOperator,
+	rdbVolumeSource v1.VolumeSource) *appv1.StatefulSet {
 	bool := false
 	sset := &appv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -710,7 +709,8 @@ func isReady(pod v1.Pod, withPVC bool) bool {
 	return false
 }
 
-func (r *SearchOperatorReconciler) executeDeployment(client client.Client, cr *searchv1alpha1.SearchOperator, usePVC bool) *appv1.StatefulSet {
+func (r *SearchOperatorReconciler) executeDeployment(client client.Client,
+	cr *searchv1alpha1.SearchOperator, usePVC bool) *appv1.StatefulSet {
 	var statefulSet *appv1.StatefulSet
 	emptyDirVolume := v1.VolumeSource{
 		EmptyDir: &v1.EmptyDirVolumeSource{},
