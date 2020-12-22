@@ -9,7 +9,7 @@ rules:
 - apiGroups:
   - search.open-cluster-management.io
   resources:
-  - searchcustomizations
+  - searchoperators
   verbs:
   - create
   - delete
@@ -21,7 +21,7 @@ rules:
 - apiGroups:
   - search.open-cluster-management.io
   resources:
-  - searchcustomizations/status
+  - searchoperators/status
   verbs:
   - get
   - patch

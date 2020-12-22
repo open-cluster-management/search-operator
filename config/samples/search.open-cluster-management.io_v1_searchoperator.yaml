@@ -8,7 +8,11 @@ spec:
     limit_memory: 1Gi
     request_cpu: 25m
     request_memory: 64Mi
+  persistence: true
+  allowdegrademode: true
   pullpolicy: Always
   pullsecret: multiclusterhub-operator-pull-secret
   searchimageoverrides:
     redisgraph_tls: quay.io/open-cluster-management/redisgraph-tls:2.2.0-PR34-9d19a44994a8da25f212ddcf410b8ac588838b97
+  storagesize: 10Gi
+
