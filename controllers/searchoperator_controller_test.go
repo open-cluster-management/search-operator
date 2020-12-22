@@ -16,10 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -348,7 +345,7 @@ func TestUpdateCR(t *testing.T) {
 	assert.Nil(t, err, "Expected Nil. Got error: %v", err)
 }
 
-func Test_operatorSetUpWithMgr(t *testing.T) {
+/*func Test_operatorSetUpWithMgr(t *testing.T) {
 	testSetup := commonSetup()
 	namespace = "test-cluster"
 	searchv1alpha1.AddToScheme(testSetup.scheme)
@@ -360,7 +357,7 @@ func Test_operatorSetUpWithMgr(t *testing.T) {
 	mgr, err := manager.New(cfg, manager.Options{})
 	err = nilSearchOperator.SetupWithManager(mgr)
 	assert.Nil(t, err, "Expected no error. Got error: %v", err)
-}
+}*/
 
 func createFakeNamedPVC(requestBytes string, namespace string, userAnnotations map[string]string) *corev1.PersistentVolumeClaim {
 	annotations := map[string]string{}
