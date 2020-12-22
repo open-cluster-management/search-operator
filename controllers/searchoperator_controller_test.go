@@ -357,8 +357,6 @@ func TestUpdateCR(t *testing.T) {
 	testSetup := commonSetup()
 	client := fake.NewFakeClientWithScheme(testSetup.scheme)
 	var err error
-	// func updateCRs(kclient client.Client, operatorCR *searchv1alpha1.SearchOperator, status string, customizationCR *searchv1alpha1.SearchCustomization, persistence bool, storageClass string, storageSize string, customValuesInuse bool) error {
-
 	err = updateCRs(client, testSetup.srchOperator, "status", testSetup.customizationCR, false, "", "10G", true)
 	assert.True(t, errors.IsNotFound(err), "Expected Not Found error. Got %v", err.Error())
 
@@ -369,6 +367,17 @@ func TestUpdateCR(t *testing.T) {
 	client = fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, testSetup.customizationCR)
 	err = updateCRs(client, testSetup.srchOperator, "status", testSetup.customizationCR, false, "", "10G", true)
 	assert.Nil(t, err, "Expected Nil. Got error: %v", err)
+}
+
+func TestGetPVC(t *testing.T) {
+	storageClass = "test"
+	pvc := getPVC()
+	assert.NotNil(t, pvc.Spec.StorageClassName, "Expected StorageClassName to be not nil.")
+	assert.Equal(t, "test", *pvc.Spec.StorageClassName, "Expected StorageClassName not found. Got %v", *pvc.Spec.StorageClassName)
+
+	storageClass = ""
+	pvc = getPVC()
+	assert.Nil(t, pvc.Spec.StorageClassName, "Expected empty StorageClassName. Got: %s", pvc.Spec.StorageClassName)
 }
 
 func createFakeNamedPVC(requestBytes string, namespace string, userAnnotations map[string]string) *corev1.PersistentVolumeClaim {
