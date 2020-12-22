@@ -36,11 +36,6 @@ spec:
         spec:
           description: SearchOperatorSpec defines the desired state of SearchOperator
           properties:
-            allowdegrademode:
-              description: If true, then whenever PVC cannot be Bound to search-redisgraph
-                pod then controller automatically sets up EmptyDir volume for search-redisgraph
-                persistence
-              type: boolean
             nodeselector:
               properties:
                 customlabelselector:
@@ -54,10 +49,6 @@ spec:
               required:
               - enabled
               type: object
-            persistence:
-              description: If true, then PVC configuration is used for search-redisgraph
-                pod
-              type: boolean
             pullpolicy:
               type: string
             pullsecret:
@@ -99,27 +90,16 @@ spec:
               required:
               - redisgraph_tls
               type: object
-            storageclass:
-              description: If specified this storage class is used , else default
-                storage class will be used by kubernetes
-              type: string
-            storagesize:
-              description: Size of the PVC storageclass which will be used by search-redisgraph
-                for persistence
-              type: string
-              pattern: "[0-9\\.]+(G|Gi|M|Mi|K|Ki)?"
           required:
-          - allowdegrademode
-          - persistence
           - redisgraph_resource
           - searchimageoverrides
-          - storagesize
           type: object
         status:
           description: SearchOperatorStatus defines the observed state of SearchOperator
           properties:
             persistence:
-              description: 'Reflects the current status of the RedisGraph pod using a Persistence mode (PVC/EmptyDir/Degraded)'
+              description: Reflects the current status of the RedisGraph pod using
+                a Persistence mode (PVC/EmptyDir/Degraded)
               type: string
           required:
           - persistence
