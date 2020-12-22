@@ -16,7 +16,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -343,6 +346,20 @@ func TestUpdateCR(t *testing.T) {
 	client = fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, testSetup.customizationCR)
 	err = updateCRs(client, testSetup.srchOperator, "status", testSetup.customizationCR, false, "", "10G", true)
 	assert.Nil(t, err, "Expected Nil. Got error: %v", err)
+}
+
+func Test_operatorSetUpWithMgr(t *testing.T) {
+	testSetup := commonSetup()
+	namespace = "test-cluster"
+	searchv1alpha1.AddToScheme(testSetup.scheme)
+	client := fake.NewFakeClientWithScheme(testSetup.scheme)
+	nilSearchOperator := SearchOperatorReconciler{client, log, testSetup.scheme}
+	var options ctrl.Options
+	options.Scheme = testSetup.scheme
+	cfg, err := config.GetConfig()
+	mgr, err := manager.New(cfg, manager.Options{})
+	err = nilSearchOperator.SetupWithManager(mgr)
+	assert.Nil(t, err, "Expected no error. Got error: %v", err)
 }
 
 func createFakeNamedPVC(requestBytes string, namespace string, userAnnotations map[string]string) *corev1.PersistentVolumeClaim {
