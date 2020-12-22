@@ -16,10 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -275,7 +272,7 @@ func Test_FallBacktoEmptyDirStatefulset(t *testing.T) {
 	assert.Equal(t, statusDegradedEmptyDir, instance.Status.PersistenceStatus, "Search Operator updated with degraded status as expected.")
 }
 
-func Test_UnschedulablePod(t *testing.T) {
+func Test_UnschedulablePodWithPersistence(t *testing.T) {
 	testSetup := commonSetup()
 
 	req := testSetup.request
@@ -300,6 +297,32 @@ func Test_UnschedulablePod(t *testing.T) {
 
 	err = client.Get(context.TODO(), req.NamespacedName, instance)
 	assert.Equal(t, statusFailedDegraded, instance.Status.PersistenceStatus, "Search Operator does not have status as expected.")
+}
+
+func Test_UnschedulablePodWithOutPersistence(t *testing.T) {
+	testSetup := commonSetup()
+
+	req := testSetup.request
+	testStatefulset := testSetup.statefulsetWithOutPVC
+
+	client := fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, testSetup.customizationCR, testSetup.secret, testStatefulset, testSetup.unSchedulablePod)
+	nilSearchOperator := SearchOperatorReconciler{client, log, testSetup.scheme}
+	var err error
+
+	instance := &searchv1alpha1.SearchOperator{}
+	err = client.Get(context.TODO(), req.NamespacedName, instance)
+	assert.Nil(t, err, "Expected search Operator to be created. Got error: %v", err)
+
+	//Set persistence to true, FallbackToEmptyDir to false in customizationCR - this should cause statefulset to try to fall back to empty dir since we don't have PVC
+	persistence := false
+	testSetup.customizationCR.Spec.Persistence = &persistence
+	err = client.Update(context.TODO(), testSetup.customizationCR)
+	_, err = nilSearchOperator.Reconcile(req)
+
+	assert.NotNil(t, err, "Expected error to be not nil. Got nil.")
+	assert.Equal(t, "Redisgraph Pod not running", err.Error(), "Expected Redisgraph Pod not running error. Got %v", err)
+	err = client.Get(context.TODO(), req.NamespacedName, instance)
+	assert.Equal(t, statusFailedNoPersistence, instance.Status.PersistenceStatus, "Search Operator does not have status as expected.")
 }
 
 func Test_UnschedulablePodWithDisAllowDegradedMode(t *testing.T) {
@@ -346,20 +369,6 @@ func TestUpdateCR(t *testing.T) {
 	client = fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, testSetup.customizationCR)
 	err = updateCRs(client, testSetup.srchOperator, "status", testSetup.customizationCR, false, "", "10G", true)
 	assert.Nil(t, err, "Expected Nil. Got error: %v", err)
-}
-
-func Test_operatorSetUpWithMgr(t *testing.T) {
-	testSetup := commonSetup()
-	namespace = "test-cluster"
-	searchv1alpha1.AddToScheme(testSetup.scheme)
-	client := fake.NewFakeClientWithScheme(testSetup.scheme)
-	nilSearchOperator := SearchOperatorReconciler{client, log, testSetup.scheme}
-	var options ctrl.Options
-	options.Scheme = testSetup.scheme
-	cfg, err := config.GetConfig()
-	mgr, err := manager.New(cfg, manager.Options{})
-	err = nilSearchOperator.SetupWithManager(mgr)
-	assert.Nil(t, err, "Expected no error. Got error: %v", err)
 }
 
 func createFakeNamedPVC(requestBytes string, namespace string, userAnnotations map[string]string) *corev1.PersistentVolumeClaim {
