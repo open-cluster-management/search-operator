@@ -381,19 +381,6 @@ func TestGetPVC(t *testing.T) {
 	assert.Nil(t, pvc.Spec.StorageClassName, "Expected empty StorageClassName. Got: %s", pvc.Spec.StorageClassName)
 }
 
-func Test_operatorSetUpWithMgr(t *testing.T) {
-	testSetup := commonSetup()
-	namespace = "test-cluster"
-	client := fake.NewFakeClientWithScheme(testSetup.scheme)
-	nilSearchOperator := SearchOperatorReconciler{client, log, testSetup.scheme}
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{})
-	if err == nil {
-		t.Log("setup manager")
-		err = nilSearchOperator.SetupWithManager(mgr)
-		assert.Nil(t, err, "Expected no error. Got error: %v", err)
-	}
-}
-
 func createFakeNamedPVC(requestBytes string, namespace string, userAnnotations map[string]string) *corev1.PersistentVolumeClaim {
 	annotations := map[string]string{}
 	for k, v := range userAnnotations {
