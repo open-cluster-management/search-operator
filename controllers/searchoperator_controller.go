@@ -97,36 +97,40 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			allowdegrade = true
 			storageClass = ""
 			storageSize = "10Gi"
+			pvcName = "acm-search-redisgraph-0"
 		} else {
 			return ctrl.Result{}, err
 		}
 
 	} else {
+		// Allowdegrade mode helps the user to set the controller from switching back to emptydir- and debug users configuration
+		allowdegrade = false
+		persistence = true
+		storageClass = ""
+		storageSize = "10Gi"
 		if custom.Spec.FallbackToEmptyDir != nil {
 			allowdegrade = *custom.Spec.FallbackToEmptyDir
-		} else {
-			allowdegrade = false
 		}
 		if custom.Spec.Persistence != nil {
 			persistence = *custom.Spec.Persistence
 		}
 		if custom.Spec.StorageClass != "" {
 			persistence = true
-		}
-		//set the  user provided values
-		customValuesInuse = true
-		storageClass = custom.Spec.StorageClass
-		if storageClass != "" {
-			pvcName = storageClass + "-search-redisgraph-0"
+			storageClass = custom.Spec.StorageClass
 		}
 		if custom.Spec.StorageSize != "" {
 			storageSize = custom.Spec.StorageSize
+		}
+		//set the  user provided values
+		customValuesInuse = true
+		if storageClass != "" {
+			pvcName = storageClass + "-search-redisgraph-0"
 		}
 		r.Log.Info(fmt.Sprintf("Storage %s", storageSize))
 	}
 	r.Log.Info("Checking if customization CR is created..", " Custom Values In use? ", customValuesInuse)
 	r.Log.Info("Values in use: ", "persistence? ", persistence, " storageClass? ", storageClass,
-		" storageSize? ", storageSize, " fallBackToEmptyDir? ", allowdegrade)
+		" storageSize? ", storageSize, " fallbackToEmptyDir? ", allowdegrade)
 
 	// Create secret if not found
 	err = r.setupSecret(r.Client, instance)
@@ -140,8 +144,19 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	// Setup RedisGraph Deployment
 	r.Log.Info(fmt.Sprintf("Config in  Use Persistence/AllowDegrade %t/%t", persistence, allowdegrade))
 	if persistence {
+
 		//If running PVC deployment nothing to do
 		if isStatefulSetAvailable(r.Client) && isPodRunning(r.Client, true, 1) && persistenceStatus == statusUsingPVC {
+			//Requeue if the user changed the config
+			if customValuesInuse {
+				if (custom.Spec.StorageClass != "" && custom.Spec.StorageClass != custom.Status.StorageClass) || (custom.Spec.StorageSize != "" && custom.Spec.StorageSize != custom.Status.StorageSize) {
+					err := deleteRedisStatefulSet(r.Client)
+					if err != nil {
+						return ctrl.Result{}, err
+					}
+					return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+				}
+			}
 			return ctrl.Result{}, nil
 		}
 		//If running degraded deployment AND AllowDegradeMode is set
