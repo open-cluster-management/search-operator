@@ -431,10 +431,10 @@ func createFakeRedisGraphPod(namespace string, persistence, schedulable bool) *c
 	}
 	if persistence {
 		volSource = corev1.VolumeSource{PersistentVolumeClaim: &persistentVolSource}
-		return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Labels: labels}, Spec: corev1.PodSpec{Volumes: []corev1.Volume{{Name: pvcName, VolumeSource: volSource}}, Containers: []corev1.Container{{Image: image}}}, Status: status}
+		return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Labels: labels}, Spec: corev1.PodSpec{Volumes: []corev1.Volume{{Name: "persist", VolumeSource: volSource}}, Containers: []corev1.Container{{Image: image}}}, Status: status}
 	}
 	volSource = corev1.VolumeSource{EmptyDir: &emptyDirVolSource}
-	return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Labels: labels}, Spec: corev1.PodSpec{Volumes: []corev1.Volume{{VolumeSource: volSource}}, Containers: []corev1.Container{{Image: image}}}, Status: status}
+	return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Labels: labels}, Spec: corev1.PodSpec{Volumes: []corev1.Volume{{Name: "persist", VolumeSource: volSource}}, Containers: []corev1.Container{{Image: image}}}, Status: status}
 
 }
 

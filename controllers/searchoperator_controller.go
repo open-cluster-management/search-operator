@@ -65,11 +65,11 @@ var (
 	storageSize          = "10Gi"
 	namespace            = os.Getenv("WATCH_NAMESPACE")
 )
+var startingSpec searchv1alpha1.SearchCustomizationSpec
 
 func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	_ = r.Log.WithValues("searchoperator", req.NamespacedName)
-
 	// Fetch the SearchOperator instance
 	instance := &searchv1alpha1.SearchOperator{}
 	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: "searchoperator", Namespace: req.Namespace}, instance)
@@ -97,36 +97,42 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			allowdegrade = true
 			storageClass = ""
 			storageSize = "10Gi"
+			pvcName = "acm-search-redisgraph-0"
+			startingSpec = searchv1alpha1.SearchCustomizationSpec{}
 		} else {
 			return ctrl.Result{}, err
 		}
 
 	} else {
+		// Allowdegrade mode helps the user to set the controller from switching back to emptydir- and debug users configuration
+		allowdegrade = false
+		persistence = true
+		storageClass = ""
+		storageSize = "10Gi"
+		pvcName = "acm-search-redisgraph-0"
 		if custom.Spec.FallbackToEmptyDir != nil {
 			allowdegrade = *custom.Spec.FallbackToEmptyDir
-		} else {
-			allowdegrade = false
 		}
 		if custom.Spec.Persistence != nil {
 			persistence = *custom.Spec.Persistence
 		}
 		if custom.Spec.StorageClass != "" {
 			persistence = true
-		}
-		//set the  user provided values
-		customValuesInuse = true
-		storageClass = custom.Spec.StorageClass
-		if storageClass != "" {
+			storageClass = custom.Spec.StorageClass
 			pvcName = storageClass + "-search-redisgraph-0"
 		}
 		if custom.Spec.StorageSize != "" {
 			storageSize = custom.Spec.StorageSize
 		}
+		//set the  user provided values
+		customValuesInuse = true
+		startingSpec = custom.Spec
 		r.Log.Info(fmt.Sprintf("Storage %s", storageSize))
 	}
+
 	r.Log.Info("Checking if customization CR is created..", " Custom Values In use? ", customValuesInuse)
 	r.Log.Info("Values in use: ", "persistence? ", persistence, " storageClass? ", storageClass,
-		" storageSize? ", storageSize, " fallBackToEmptyDir? ", allowdegrade)
+		" storageSize? ", storageSize, " fallbackToEmptyDir? ", allowdegrade)
 
 	// Create secret if not found
 	err = r.setupSecret(r.Client, instance)
@@ -135,18 +141,18 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		return ctrl.Result{}, err
 	}
 
+	//Read the searchoperator status
 	persistenceStatus := instance.Status.PersistenceStatus
 
 	// Setup RedisGraph Deployment
 	r.Log.Info(fmt.Sprintf("Config in  Use Persistence/AllowDegrade %t/%t", persistence, allowdegrade))
 	if persistence {
 		//If running PVC deployment nothing to do
-		if isStatefulSetAvailable(r.Client) && isPodRunning(r.Client, true, 1) && persistenceStatus == statusUsingPVC {
+		if persistenceStatus == statusUsingPVC && isStatefulSetAvailable(r.Client) && r.isPodRunning(true, 1) {
 			return ctrl.Result{}, nil
 		}
 		//If running degraded deployment AND AllowDegradeMode is set
-		if isStatefulSetAvailable(r.Client) && isPodRunning(r.Client, false, 1) && allowdegrade &&
-			persistenceStatus == statusDegradedEmptyDir {
+		if allowdegrade && persistenceStatus == statusDegradedEmptyDir && isStatefulSetAvailable(r.Client) && r.isPodRunning(false, 1) {
 			return ctrl.Result{}, nil
 		}
 		pvcError := setupVolume(r.Client)
@@ -154,7 +160,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			return ctrl.Result{}, pvcError
 		}
 		r.executeDeployment(r.Client, instance, true)
-		podReady := isPodRunning(r.Client, true, waitSecondsForPodChk)
+		podReady := r.isPodRunning(true, waitSecondsForPodChk)
 		if podReady {
 			//Write Status
 			err := updateCRs(r.Client, instance, statusUsingPVC,
@@ -175,7 +181,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 				return ctrl.Result{}, err
 			}
 			r.executeDeployment(r.Client, instance, false)
-			if isPodRunning(r.Client, false, waitSecondsForPodChk) {
+			if r.isPodRunning(false, waitSecondsForPodChk) {
 				//Write Status
 				err := updateCRs(r.Client, instance, statusDegradedEmptyDir,
 					custom, false, "", "", customValuesInuse)
@@ -198,13 +204,13 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			return ctrl.Result{RequeueAfter: 5 * time.Second}, fmt.Errorf(redisNotRunning)
 		}
 	} else {
-		if !persistence && isStatefulSetAvailable(r.Client) && isPodRunning(r.Client, false, 1) &&
+		if !persistence && isStatefulSetAvailable(r.Client) && r.isPodRunning(false, 1) &&
 			persistenceStatus == statusUsingNodeEmptyDir {
 			return ctrl.Result{}, nil
 		}
 		r.Log.Info("Using Empty dir Deployment")
 		r.executeDeployment(r.Client, instance, false)
-		if isPodRunning(r.Client, false, waitSecondsForPodChk) {
+		if r.isPodRunning(false, waitSecondsForPodChk) {
 			//Write Status, if error - requeue
 			err := updateCRs(r.Client, instance, statusUsingNodeEmptyDir, custom, false, "", "", customValuesInuse)
 			if err != nil {
@@ -660,7 +666,7 @@ func isStatefulSetAvailable(kclient client.Client) bool {
 	return true
 }
 
-func isPodRunning(kclient client.Client, withPVC bool, waitSeconds int) bool {
+func (r *SearchOperatorReconciler) isPodRunning(withPVC bool, waitSeconds int) bool {
 	log.Info("Checking Redisgraph Pod Status...")
 	//Keep checking status until waitSeconds
 	// We assume its not running
@@ -668,7 +674,7 @@ func isPodRunning(kclient client.Client, withPVC bool, waitSeconds int) bool {
 	for count < waitSeconds {
 		podList := &corev1.PodList{}
 		opts := []client.ListOption{client.MatchingLabels{"app": appName, "component": "redisgraph"}}
-		err := kclient.List(context.TODO(), podList, opts...)
+		err := r.Client.List(context.TODO(), podList, opts...)
 		if err != nil {
 			log.Info("Error listing redisgraph pods. ", err)
 			return false
@@ -681,6 +687,14 @@ func isPodRunning(kclient client.Client, withPVC bool, waitSeconds int) bool {
 		}
 		count++
 		time.Sleep(1 * time.Second)
+		// Fetch the SearchCustomization instance
+		custom := &searchv1alpha1.SearchCustomization{}
+		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: "searchcustomization", Namespace: namespace}, custom)
+		if err == nil && !reflect.DeepEqual(custom.Spec, startingSpec) {
+			log.Info("SearchCustomization Spec updated , Reconciling ..")
+			break
+		}
+
 	}
 	log.Info("Redisgraph Pod not Running...")
 	return false
@@ -696,11 +710,14 @@ func isReady(pod v1.Pod, withPVC bool) bool {
 	for _, status := range pod.Status.ContainerStatuses {
 		if status.Ready {
 			for _, name := range pod.Spec.Volumes {
+				if name.Name != "persist" {
+					continue
+				}
 				if withPVC && name.PersistentVolumeClaim != nil && name.PersistentVolumeClaim.ClaimName == pvcName {
-					log.Info("RedisGraph Pod with PVC Ready")
+					log.Info("RedisGraph Pod with PVC Running")
 					return true
-				} else if !withPVC && name.EmptyDir != nil {
-					log.Info("RedisGraph Pod with EmptyDir Ready")
+				} else if !withPVC && name.PersistentVolumeClaim == nil {
+					log.Info("RedisGraph Pod with EmptyDir Running")
 					return true
 				}
 			}
