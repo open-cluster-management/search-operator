@@ -70,14 +70,14 @@ func commonSetup() testSetup {
 	client := fake.NewFakeClientWithScheme(testScheme)
 	testSearchOperatorReconciler := SearchOperatorReconciler{client, log, testScheme}
 
-	testStatefulsetWithPVC := testSearchOperatorReconciler.executeDeployment(client, testSearchOperator, true)
-	testStatefulsetWithOutPVC := testSearchOperatorReconciler.executeDeployment(client, testSearchOperator, false)
+	testStatefulsetWithPVC := testSearchOperatorReconciler.executeDeployment(client, testSearchOperator, true, true)
+	testStatefulsetWithOutPVC := testSearchOperatorReconciler.executeDeployment(client, testSearchOperator, false, true)
 	// Set PVC Size to 10Gi
 	fakePVC := createFakeNamedPVC("10Gi", testSearchOperator.Namespace, nil)
 	fakePodWithPVC := createFakeRedisGraphPod(namespace, true, true)
 	fakePodWithOutPVC := createFakeRedisGraphPod(namespace, false, true)
 	fakeUnschedulablePod := createFakeRedisGraphPod(namespace, false, false)
-	fakeSearchCustCR := createFakeSearchCustomizationCR(namespace, false, false)
+	fakeSearchCustCR := createFakeSearchCustomizationCR(namespace, false)
 	testSetup := testSetup{scheme: testScheme,
 		request:               req,
 		srchOperator:          testSearchOperator,
@@ -176,7 +176,7 @@ func Test_EmptyDirStatefulsetCreatedWithOwnerRef(t *testing.T) {
 	assert.Equal(t, testSetup.srchOperator.Name, ownerRef.Name, "ownerRef has expected Name.")
 }
 
-func Test_EmptyDirStatefulsetWithNodePersistenceStatus(t *testing.T) {
+func Test_StatefulsetWithNoPersistenceStatus(t *testing.T) {
 	testSetup := commonSetup()
 
 	client := fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, testSetup.secret, testSetup.podWithOutPVC, testSetup.customizationCR)
@@ -194,7 +194,7 @@ func Test_EmptyDirStatefulsetWithNodePersistenceStatus(t *testing.T) {
 	err = client.Get(context.TODO(), testSetup.request.NamespacedName, instance)
 
 	assert.Nil(t, err, "Expected Nil. Got error: %v", err)
-	assert.Equal(t, statusUsingNodeEmptyDir, instance.Status.PersistenceStatus, "Search Operator updated with node empty dir status as expected.")
+	assert.Equal(t, statusNoPersistence, instance.Status.PersistenceStatus, "Search Operator updated with expected status.")
 }
 
 func Test_StatefulsetWithPVC(t *testing.T) {
@@ -231,14 +231,14 @@ func Test_StatefulsetWithPVC(t *testing.T) {
 
 }
 
-func Test_FallBacktoEmptyDirStatefulset(t *testing.T) {
+func Test_FailSettingupWithPVC(t *testing.T) {
 	testSetup := commonSetup()
 
 	req := testSetup.request
-	testStatefulset := testSetup.statefulsetWithOutPVC
+	testStatefulset := testSetup.statefulsetWithPVC
 
 	//TODO: Passing already existing secret doesn't set ownerRef - testSecret
-	client := fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, testSetup.secret, testSetup.podWithOutPVC)
+	client := fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, testSetup.secret, testSetup.unSchedulablePod)
 	nilSearchOperator := SearchOperatorReconciler{client, log, testSetup.scheme}
 	var err error
 
@@ -248,15 +248,11 @@ func Test_FallBacktoEmptyDirStatefulset(t *testing.T) {
 
 	//Set persistence to true in customizationCR - this should cause statefulset to fall back to empty dir since we don't have PVC
 	persistence := true
-	fallbackToEmptyDir := true //defaults to false in customizationCR
 	testSetup.customizationCR.Spec.Persistence = &persistence
-	testSetup.customizationCR.Spec.FallbackToEmptyDir = &fallbackToEmptyDir
 	err = client.Create(context.TODO(), testSetup.customizationCR)
 
 	_, err = nilSearchOperator.Reconcile(req)
-	//Calling reconcile again to check if shorter path with 1 sec wait time is used the second time
-	_, err = nilSearchOperator.Reconcile(req)
-	assert.Nil(t, err, "Expected search Operator reconcile to complete successfully. Got error: %v", err)
+	assert.NotNil(t, err, "Expected error to be not nil. Got nil.")
 
 	err = client.Get(context.TODO(), req.NamespacedName, instance)
 	assert.Nil(t, err, "Expected search Operator to be created. Got error: %v", err)
@@ -264,12 +260,8 @@ func Test_FallBacktoEmptyDirStatefulset(t *testing.T) {
 	foundStatefulset := &appv1.StatefulSet{}
 	err = client.Get(context.TODO(), types.NamespacedName{Name: testStatefulset.Name, Namespace: testStatefulset.Namespace}, foundStatefulset)
 
-	assert.Nil(t, err, "Expected Statefulset to be created. Got error: %v", err)
-
-	assert.Equal(t, testStatefulset.Name, foundStatefulset.Name, "Statefulset is created with expected name.")
-	assert.Equal(t, testStatefulset.Namespace, foundStatefulset.Namespace, "Statefulset is created in expected namespace.")
-	assert.EqualValues(t, testStatefulset.Spec.Template.Spec, foundStatefulset.Spec.Template.Spec, "Statefulset is created with expected template spec.")
-	assert.Equal(t, statusDegradedEmptyDir, instance.Status.PersistenceStatus, "Search Operator updated with degraded status as expected.")
+	assert.True(t, errors.IsNotFound(err), "Expected Not Found error. Got %v", err.Error())
+	assert.Equal(t, statusFailedUsingPVC, instance.Status.PersistenceStatus, "Search Operator updated with expected status.")
 }
 
 func Test_UnschedulablePodWithPersistence(t *testing.T) {
@@ -313,7 +305,7 @@ func Test_UnschedulablePodWithOutPersistence(t *testing.T) {
 	err = client.Get(context.TODO(), req.NamespacedName, instance)
 	assert.Nil(t, err, "Expected search Operator to be created. Got error: %v", err)
 
-	//Set persistence to true, FallbackToEmptyDir to false in customizationCR - this should cause statefulset to try to fall back to empty dir since we don't have PVC
+	//Set persistence to true in customizationCR - this should cause statefulset to try to fall back to empty dir since we don't have PVC
 	persistence := false
 	testSetup.customizationCR.Spec.Persistence = &persistence
 	err = client.Update(context.TODO(), testSetup.customizationCR)
@@ -339,11 +331,9 @@ func Test_UnschedulablePodWithDisAllowDegradedMode(t *testing.T) {
 	err = client.Get(context.TODO(), req.NamespacedName, instance)
 	assert.Nil(t, err, "Expected search Operator to be created. Got error: %v", err)
 
-	//Set persistence to true, FallbackToEmptyDir to false in customizationCR - this should cause statefulset to try to fall back to empty dir since we don't have PVC
+	//Set persistence to true in customizationCR - this should cause statefulset to try to fall back to empty dir since we don't have PVC
 	persistence := true
 	testSetup.customizationCR.Spec.Persistence = &persistence
-	allowDegrade := false
-	testSetup.customizationCR.Spec.FallbackToEmptyDir = &allowDegrade
 	err = client.Update(context.TODO(), testSetup.customizationCR)
 	_, err = nilSearchOperator.Reconcile(req)
 
@@ -438,7 +428,7 @@ func createFakeRedisGraphPod(namespace string, persistence, schedulable bool) *c
 
 }
 
-func createFakeSearchCustomizationCR(namespace string, persistence, fallbackToEmptyDir bool) *searchv1alpha1.SearchCustomization {
+func createFakeSearchCustomizationCR(namespace string, persistence bool) *searchv1alpha1.SearchCustomization {
 	return &searchv1alpha1.SearchCustomization{TypeMeta: metav1.TypeMeta{
 		APIVersion: searchv1alpha1.GroupVersion.String(),
 		Kind:       "SearchCustomization"},
