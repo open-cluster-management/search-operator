@@ -13,6 +13,8 @@ spec:
     kind: SearchOperator
     listKind: SearchOperatorList
     plural: searchoperators
+    shortNames:
+    - srcho
     singular: searchoperator
   scope: Namespaced
   subresources:

@@ -13,6 +13,8 @@ spec:
     kind: SearchCustomization
     listKind: SearchCustomizationList
     plural: searchcustomizations
+    shortNames:
+    - srchc
     singular: searchcustomization
   scope: Namespaced
   subresources:
@@ -37,12 +39,6 @@ spec:
           description: SearchCustomizationSpec defines the desired state of SearchCustomization
             properties.
           properties:
-            fallbackToEmptyDir:
-              description: If set to true and a PVC cannot be bound to the search-redisgraph
-                pod, then the controller automatically sets up EmptyDir volume for
-                the search-redisgraph pod.
-              type: boolean
-              pattern: "(true|false)"
             persistence:
               description: If set to true, then a PVC is created on the storageClass
                 that is provided. If there is no storageClass specified, default storageClass

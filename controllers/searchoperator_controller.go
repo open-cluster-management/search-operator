@@ -52,6 +52,7 @@ const (
 	statusFailedDegraded      = "Unable to create Redisgraph Deployment in Degraded Mode"
 	statusFailedUsingPVC      = "Unable to create Redisgraph Deployment using PVC"
 	statusFailedNoPersistence = "Unable to create Redisgraph Deployment"
+	statusNoPersistence       = "Redisgraph pod running with persistence disabled"
 	redisUser                 = int64(10001)
 )
 
@@ -104,20 +105,17 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		}
 
 	} else {
-		// Allowdegrade mode helps the user to set the controller from switching back to emptydir- and debug users configuration
+		if custom.Spec.Persistence != nil && *custom.Spec.Persistence == false {
+			persistence = false
+		} else {
+			persistence = true
+		}
+		// Allowdegrade mode helps the user to set the controller from switching back to emptydir - and debug users configuration
 		allowdegrade = false
-		persistence = true
 		storageClass = ""
 		storageSize = "10Gi"
 		pvcName = "acm-search-redisgraph-0"
-		if custom.Spec.FallbackToEmptyDir != nil {
-			allowdegrade = *custom.Spec.FallbackToEmptyDir
-		}
-		if custom.Spec.Persistence != nil {
-			persistence = *custom.Spec.Persistence
-		}
 		if custom.Spec.StorageClass != "" {
-			persistence = true
 			storageClass = custom.Spec.StorageClass
 			pvcName = storageClass + "-search-redisgraph-0"
 		}
@@ -159,7 +157,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		if pvcError != nil {
 			return ctrl.Result{}, pvcError
 		}
-		r.executeDeployment(r.Client, instance, true)
+		r.executeDeployment(r.Client, instance, true, persistence)
 		podReady := r.isPodRunning(true, waitSecondsForPodChk)
 		if podReady {
 			//Write Status
@@ -180,7 +178,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			if err != nil {
 				return ctrl.Result{}, err
 			}
-			r.executeDeployment(r.Client, instance, false)
+			r.executeDeployment(r.Client, instance, false, persistence)
 			if r.isPodRunning(false, waitSecondsForPodChk) {
 				//Write Status
 				err := updateCRs(r.Client, instance, statusDegradedEmptyDir,
@@ -204,20 +202,20 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			return ctrl.Result{RequeueAfter: 5 * time.Second}, fmt.Errorf(redisNotRunning)
 		}
 	} else {
-		if !persistence && isStatefulSetAvailable(r.Client) && r.isPodRunning(false, 1) &&
-			persistenceStatus == statusUsingNodeEmptyDir {
+		if isStatefulSetAvailable(r.Client) && r.isPodRunning(false, 1) &&
+			persistenceStatus == statusNoPersistence {
 			return ctrl.Result{}, nil
 		}
-		r.Log.Info("Using Empty dir Deployment")
-		r.executeDeployment(r.Client, instance, false)
+		r.Log.Info("Using Deployment with persistence disabled")
+		r.executeDeployment(r.Client, instance, false, persistence)
 		if r.isPodRunning(false, waitSecondsForPodChk) {
 			//Write Status, if error - requeue
-			err := updateCRs(r.Client, instance, statusUsingNodeEmptyDir, custom, false, "", "", customValuesInuse)
+			err := updateCRs(r.Client, instance, statusNoPersistence, custom, false, "", "", customValuesInuse)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
 		} else {
-			r.Log.Info("Unable to create Redisgraph Deployment")
+			r.Log.Info("Unable to create Redisgraph Deployment with persistence disabled")
 			//Write Status, delete statefulset and requeue
 			r.reconcileOnError(instance, statusFailedNoPersistence, custom, false, "", "", customValuesInuse)
 			return ctrl.Result{RequeueAfter: 5 * time.Second}, fmt.Errorf(redisNotRunning)
@@ -286,7 +284,7 @@ func int32Ptr(i int32) *int32 { return &i }
 func int64Ptr(i int64) *int64 { return &i }
 
 func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOperator,
-	rdbVolumeSource v1.VolumeSource) *appv1.StatefulSet {
+	rdbVolumeSource v1.VolumeSource, saverdb string) *appv1.StatefulSet {
 	bool := false
 	sset := &appv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -336,6 +334,10 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 								{
 									Name:  "REDIS_GRAPH_SSL",
 									Value: "true",
+								},
+								{
+									Name:  "SAVERDB",
+									Value: saverdb,
 								},
 							},
 							LivenessProbe: &v1.Probe{
@@ -709,6 +711,12 @@ func isReady(pod v1.Pod, withPVC bool) bool {
 	}
 	for _, status := range pod.Status.ContainerStatuses {
 		if status.Ready {
+			for _, env := range pod.Spec.Containers[0].Env {
+				if !withPVC && env.Name == "SAVERDB" && env.Value == "false" {
+					log.Info("RedisGraph Pod Running with Persistence disabled")
+					return true
+				}
+			}
 			for _, name := range pod.Spec.Volumes {
 				if name.Name != "persist" {
 					continue
@@ -727,7 +735,7 @@ func isReady(pod v1.Pod, withPVC bool) bool {
 }
 
 func (r *SearchOperatorReconciler) executeDeployment(client client.Client,
-	cr *searchv1alpha1.SearchOperator, usePVC bool) *appv1.StatefulSet {
+	cr *searchv1alpha1.SearchOperator, usePVC bool, saverdb bool) *appv1.StatefulSet {
 	var statefulSet *appv1.StatefulSet
 	emptyDirVolume := v1.VolumeSource{
 		EmptyDir: &v1.EmptyDirVolumeSource{},
@@ -737,10 +745,14 @@ func (r *SearchOperatorReconciler) executeDeployment(client client.Client,
 			ClaimName: pvcName,
 		},
 	}
-	if !usePVC {
-		statefulSet = r.getStatefulSet(cr, emptyDirVolume)
+	if saverdb {
+		if !usePVC {
+			statefulSet = r.getStatefulSet(cr, emptyDirVolume, "true")
+		} else {
+			statefulSet = r.getStatefulSet(cr, pvcVolume, "true")
+		}
 	} else {
-		statefulSet = r.getStatefulSet(cr, pvcVolume)
+		statefulSet = r.getStatefulSet(cr, emptyDirVolume, "false")
 	}
 	updateRedisStatefulSet(client, statefulSet)
 	return statefulSet
