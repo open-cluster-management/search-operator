@@ -252,7 +252,7 @@ func Test_FailSettingupWithPVC(t *testing.T) {
 	err = client.Create(context.TODO(), testSetup.customizationCR)
 
 	_, err = nilSearchOperator.Reconcile(req)
-	assert.NotNil(t, err, "Expected error to be not nil. Got nil.")
+	assert.NotNil(t, err, "Expected Reconcile error to be not nil. Got nil.")
 
 	err = client.Get(context.TODO(), req.NamespacedName, instance)
 	assert.Nil(t, err, "Expected search Operator to be created. Got error: %v", err)
