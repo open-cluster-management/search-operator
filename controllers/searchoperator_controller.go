@@ -712,7 +712,7 @@ func isReady(pod v1.Pod, withPVC bool) bool {
 	for _, status := range pod.Status.ContainerStatuses {
 		if status.Ready {
 			for _, env := range pod.Spec.Containers[0].Env {
-				if env.Name == "SAVERDB" && env.Value == "false" {
+				if !withPVC && env.Name == "SAVERDB" && env.Value == "false" {
 					log.Info("RedisGraph Pod Running with Persistence disabled")
 					return true
 				}
