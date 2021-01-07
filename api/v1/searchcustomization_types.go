@@ -41,11 +41,6 @@ type SearchCustomizationSpec struct {
 	// If there is no storageClass specified, default storageClass is used to persist Redisgraph data.
 	// +optional
 	Persistence *bool `json:"persistence,omitempty"`
-
-	// If set to true and a PVC cannot be bound to the search-redisgraph
-	// pod, then the controller automatically sets up EmptyDir volume for the search-redisgraph pod.
-	// +optional
-	FallbackToEmptyDir *bool `json:"fallbackToEmptyDir,omitempty"`
 }
 
 // SearchCustomizationStatus defines the observed state of SearchCustomization.

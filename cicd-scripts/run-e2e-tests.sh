@@ -23,7 +23,7 @@ deploy() {
 	apply_customizationCR
 	test_no_persistence
 	test_pvc_creation_with_custom_storage_settings
-	test_disable_fallback
+	test_invalid_storageclass
 	test_update_podresource_search_operator
 	#delete_kind_hub	
 	#delete_command_binaries
@@ -168,7 +168,7 @@ test_no_persistence() {
 	  SEARCHOPERATOR=$(kubectl get searchoperator searchoperator -n open-cluster-management -o json | jq '.status.persistence')
 	  echo $SEARCHOPERATOR
 	  count=`expr $count + 1`
-	  if [[ "$SEARCHOPERATOR" == "\"Node level persistence using EmptyDir\"" ]]
+	  if [[ "$SEARCHOPERATOR" == "\"Redisgraph pod running with persistence disabled\"" ]]
 	  then
 	     echo "SUCCESS - Redisgraph Pod Ready"
 		 break
@@ -195,7 +195,7 @@ test_no_persistence() {
 
 test_pvc_creation_with_custom_storage_settings() {
 	echo "=====Update searchcustomization with valid storage settings====="
-	echo -n "Patch searchcustomization: " && kubectl patch searchcustomization searchcustomization -p '{"spec":{"fallbackToEmptyDir":false,"storageClass": "standard", "storageSize": "2Gi"}}' --type='merge'
+	echo -n "Patch searchcustomization: " && kubectl patch searchcustomization searchcustomization -p '{"spec":{"persistence":true,"storageClass": "standard", "storageSize": "2Gi"}}' --type='merge'
 	echo "Waiting 2 minutes for the redisgraph pod to get Ready... " && sleep 120
 	count=0
 	while true ; do
@@ -239,10 +239,10 @@ test_pvc_creation_with_custom_storage_settings() {
 	fi
 }
 
-test_disable_fallback() {
-	echo "=====Update searchcustomization with invalid storage class and fallback false====="
+test_invalid_storageclass() {
+	echo "=====Update searchcustomization with invalid storage class ====="
 	# echo -n "Patch searchcustomization: " && kubectl patch searchcustomization searchcustomization -p '{"spec":{"persistence":false}}' --type='merge'
-	echo -n "Patch searchcustomization: " && kubectl patch searchcustomization searchcustomization -p '{"spec":{"fallbackToEmptyDir":false,"storageClass": "test"}}' --type='merge'
+	echo -n "Patch searchcustomization: " && kubectl patch searchcustomization searchcustomization -p '{"spec":{"storageClass": "test"}}' --type='merge'
 	echo "Waiting 4 minutes for the redisgraph pod to get Ready... " && sleep 240
 	count=0
 	while true ; do
@@ -251,14 +251,14 @@ test_disable_fallback() {
 	  count=`expr $count + 1`
 	  if [[ "$SEARCHOPERATOR" == "\"Unable to create Redisgraph Deployment using PVC\"" ]]
 	  then
-	     echo "SUCCESS - Disable fallback setting works"
+	     echo "SUCCESS - Testing invalid storageclass setting works"
 		 break
 	  fi
 	  echo "No Success yet ..Sleeping for 1s"
 	  sleep 1s
 	  if [ $count -gt 60 ]
 	  then
-	     echo "FAILED - Setting up fallback false"
+	     echo "FAILED - Setting up invalid storageclass"
 		 exit 1
 	  fi
 	done 
