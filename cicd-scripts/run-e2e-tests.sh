@@ -161,7 +161,7 @@ apply_customizationCR() {
 test_no_persistence() {
 	echo "=====Disable search persistence====="
 	echo -n "Patch searchcustomization: " && kubectl patch searchcustomization searchcustomization -p '{"spec":{"persistence":false}}' --type='merge'
-	echo -n "Delete PVC : " && kubectl delete pvc acm-search-redisgraph-0
+	echo -n "Delete PVC : " && kubectl delete pvc search-redisgraph-pvc-0
 	echo "Waiting 2 minutes for the redisgraph pod to get Ready... " && sleep 120
     count=0
 	while true ; do
