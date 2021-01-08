@@ -54,6 +54,7 @@ const (
 	statusFailedNoPersistence = "Unable to create Redisgraph Deployment"
 	statusNoPersistence       = "Redisgraph pod running with persistence disabled"
 	redisUser                 = int64(10001)
+	defaultPvcName            = "search-redisgraph-pvc-0"
 )
 
 var (
@@ -98,7 +99,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			allowdegrade = true
 			storageClass = ""
 			storageSize = "10Gi"
-			pvcName = "search-redisgraph-pvc-0"
+			pvcName = defaultPvcName
 			startingSpec = searchv1alpha1.SearchCustomizationSpec{}
 		} else {
 			return ctrl.Result{}, err
@@ -114,7 +115,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		allowdegrade = false
 		storageClass = ""
 		storageSize = "10Gi"
-		pvcName = "search-redisgraph-pvc-0"
+		pvcName = defaultPvcName
 		if custom.Spec.StorageClass != "" {
 			storageClass = custom.Spec.StorageClass
 			pvcName = storageClass + "-search-redisgraph-0"
