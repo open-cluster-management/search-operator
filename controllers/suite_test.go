@@ -15,8 +15,8 @@ limitations under the License.
 */
 
 package controllers
-
-/*import (
+/*
+import (
 	"path/filepath"
 	"testing"
 
@@ -30,7 +30,7 @@ package controllers
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	searchopenclustermanagementiov1 "github.com/open-cluster-management/search-operator/api/v1"
+	searchopenclustermanagementiov1alpha1 "github.com/open-cluster-management/search-operator/api/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -62,10 +62,10 @@ var _ = BeforeSuite(func(done Done) {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(cfg).ToNot(BeNil())
 
-	err = searchopenclustermanagementiov1.AddToScheme(scheme.Scheme)
+	err = searchopenclustermanagementiov1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = searchopenclustermanagementiov1.AddToScheme(scheme.Scheme)
+	err = searchopenclustermanagementiov1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	// +kubebuilder:scaffold:scheme
