@@ -91,4 +91,3 @@ type ImageOverrides struct {
 func init() {
 	SchemeBuilder.Register(&SearchOperator{}, &SearchOperatorList{})
 }
-
