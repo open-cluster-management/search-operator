@@ -389,10 +389,6 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 									Name:      "stunnel-pid",
 									MountPath: "/rg",
 								},
-								{
-									Name:      "persist",
-									MountPath: "/redis-data",
-								},
 							},
 						},
 					},
@@ -437,6 +433,15 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 			VolumeSource: rdbVolumeSource,
 		}
 		sset.Spec.Template.Spec.Volumes = append(sset.Spec.Template.Spec.Volumes, rdbVolume)
+		rdbVolumeMount := v1.VolumeMount{
+			Name:      "persist",
+			MountPath: "/redis-data",
+		}
+		for _, container := range sset.Spec.Template.Spec.Containers {
+			if container.Name == "redisgraph" {
+				container.VolumeMounts = append(container.VolumeMounts, rdbVolumeMount)
+			}
+		}
 	}
 
 	if err := ctrl.SetControllerReference(cr, sset, r.Scheme); err != nil {
