@@ -389,10 +389,6 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 									Name:      "stunnel-pid",
 									MountPath: "/rg",
 								},
-								{
-									Name:      "persist",
-									MountPath: "/redis-data",
-								},
 							},
 						},
 					},
@@ -402,10 +398,6 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 							VolumeSource: v1.VolumeSource{
 								EmptyDir: &v1.EmptyDirVolumeSource{},
 							},
-						},
-						{
-							Name:         "persist",
-							VolumeSource: rdbVolumeSource,
 						},
 						{
 							Name: "redis-graph-certs",
@@ -434,6 +426,26 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 			},
 		},
 	}
+
+	if (v1.VolumeSource{}) != rdbVolumeSource {
+		rdbVolume := v1.Volume{
+			Name:         "persist",
+			VolumeSource: rdbVolumeSource,
+		}
+		sset.Spec.Template.Spec.Volumes = append(sset.Spec.Template.Spec.Volumes, rdbVolume)
+		rdbVolumeMount := v1.VolumeMount{
+			Name:      "persist",
+			MountPath: "/redis-data",
+		}
+		for i, container := range sset.Spec.Template.Spec.Containers {
+			if container.Name == "redisgraph" {
+				sset.Spec.Template.Spec.Containers[i].VolumeMounts =
+					append(sset.Spec.Template.Spec.Containers[i].VolumeMounts, rdbVolumeMount)
+				log.Info("Added rdbVolumeMount in container: ", container.Name, rdbVolumeMount.MountPath)
+			}
+		}
+	}
+
 	if err := ctrl.SetControllerReference(cr, sset, r.Scheme); err != nil {
 		log.Info("Cannot set statefulSet OwnerReference", err.Error())
 	}
@@ -753,7 +765,7 @@ func (r *SearchOperatorReconciler) executeDeployment(client client.Client,
 			statefulSet = r.getStatefulSet(cr, pvcVolume, "true")
 		}
 	} else {
-		statefulSet = r.getStatefulSet(cr, emptyDirVolume, "false")
+		statefulSet = r.getStatefulSet(cr, v1.VolumeSource{}, "false")
 	}
 	updateRedisStatefulSet(client, statefulSet)
 	return statefulSet
