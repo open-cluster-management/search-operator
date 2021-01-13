@@ -437,15 +437,12 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 			Name:      "persist",
 			MountPath: "/redis-data",
 		}
-		for _, container := range sset.Spec.Template.Spec.Containers {
+		for i, container := range sset.Spec.Template.Spec.Containers {
 			if container.Name == "redisgraph" {
-				container.VolumeMounts = append(container.VolumeMounts, rdbVolumeMount)
+				sset.Spec.Template.Spec.Containers[i].VolumeMounts = append(sset.Spec.Template.Spec.Containers[i].VolumeMounts, rdbVolumeMount)
 				log.Info("Added rdbVolumeMount in container: ", container.Name, rdbVolumeMount.MountPath)
-			} else {
-				log.Info("container.Name is not ", component, container.Name)
 			}
 		}
-		sset.Spec.Template.Spec.Containers[0].VolumeMounts = append(sset.Spec.Template.Spec.Containers[0].VolumeMounts, rdbVolumeMount)
 	}
 
 	if err := ctrl.SetControllerReference(cr, sset, r.Scheme); err != nil {
