@@ -162,7 +162,7 @@ test_no_persistence() {
 	echo "=====Disable search persistence====="
 	echo -n "Patch searchcustomization: " && kubectl patch searchcustomization searchcustomization -p '{"spec":{"persistence":false}}' --type='merge'
 	echo -n "Delete PVC : " && kubectl delete pvc search-redisgraph-pvc-0
-	echo "Waiting 2 minutes for the redisgraph pod to get Ready... " && sleep 120
+	echo "Waiting 4 minutes for the redisgraph pod to get Ready... " && sleep 240
     count=0
 	while true ; do
 	  SEARCHOPERATOR=$(kubectl get searchoperator searchoperator -n open-cluster-management -o json | jq '.status.persistence')
