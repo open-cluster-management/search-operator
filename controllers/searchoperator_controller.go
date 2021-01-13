@@ -440,9 +440,9 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 		for _, container := range sset.Spec.Template.Spec.Containers {
 			if container.Name == "redisgraph" {
 				container.VolumeMounts = append(container.VolumeMounts, rdbVolumeMount)
-				log.Info("Added rdbVolumeMount: ", rdbVolumeMount.MountPath)
+				log.Info("Added rdbVolumeMount in container: ", container.Name, rdbVolumeMount.MountPath)
 			} else {
-				log.Info("container.Name is not ", component)
+				log.Info("container.Name is not ", component, container.Name)
 			}
 		}
 		sset.Spec.Template.Spec.Containers[0].VolumeMounts = append(sset.Spec.Template.Spec.Containers[0].VolumeMounts, rdbVolumeMount)
