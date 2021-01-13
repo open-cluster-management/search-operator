@@ -3,4 +3,4 @@ kind: SearchCustomization
 metadata:
   name: searchcustomization
 spec:
-  persistence: true
+  persistence: false
