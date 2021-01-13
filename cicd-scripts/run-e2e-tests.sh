@@ -120,7 +120,7 @@ echo "=====Initial setup for tests====="
 	# cd search-operator
     echo -n "Applying search operator CRD:" && kubectl apply -f ./config/crd/bases/search.open-cluster-management.io_searchoperators.yaml
     echo -n "Applying search customization CRD:" && kubectl apply -f ./config/crd/bases/search.open-cluster-management.io_searchcustomizations.yaml
-    echo -n "Applying sample search operator: " && kubectl apply -f ./config/samples/search.open-cluster-management.io_v1_searchoperator.yaml
+    echo -n "Applying sample search operator: " && kubectl apply -f ./config/samples/search.open-cluster-management.io_v1alpha1_searchoperator.yaml
 	echo -n "Applying search operator service account: " && kubectl apply -f ./test/service_account.yaml
 	echo -n "Applying search operator role: " && kubectl apply -f ./deploy/role.yaml
 	echo -n "Applying search operator role binding: " && kubectl apply -f ./deploy/role_binding.yaml
@@ -156,7 +156,7 @@ test_default_pvc() {
 }
 
 apply_customizationCR() {
-	echo -n "Applying sample search customization: " && kubectl apply -f ./config/samples/search.open-cluster-management.io_v1_searchcustomization.yaml
+	echo -n "Applying sample search customization: " && kubectl apply -f ./config/samples/search.open-cluster-management.io_v1alpha1_searchcustomization.yaml
 }
 test_no_persistence() {
 	echo "=====Disable search persistence====="
