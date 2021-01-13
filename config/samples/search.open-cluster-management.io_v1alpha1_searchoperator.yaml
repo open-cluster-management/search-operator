@@ -1,4 +1,4 @@
-apiVersion: search.open-cluster-management.io/v1
+apiVersion: search.open-cluster-management.io/v1alpha1
 kind: SearchOperator
 metadata:
   name: searchoperator
