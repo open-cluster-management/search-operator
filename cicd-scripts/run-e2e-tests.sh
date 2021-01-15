@@ -25,6 +25,7 @@ deploy() {
 	test_pvc_creation_with_custom_storage_settings
 	test_invalid_storageclass
 	test_update_podresource_search_operator
+	test_fallback_emptydir
 	#delete_kind_hub	
 	#delete_command_binaries
 }
@@ -308,6 +309,34 @@ test_update_podresource_search_operator() {
 		 exit 1
 	  fi
 	done
+}
+
+test_fallback_emptydir() {
+	echo "=====Delete searchcustomization and test fallbackto EmptyDir====="
+	echo -n "Delete searchcustomization: " && kubectl delete searchcustomization searchcustomization 
+	echo -n "Patch searchoperator: " && kubectl patch sc standard -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}' --type='merge'
+	echo -n "Scale statefulset : " && kubectl scale statefulset search-redisgraph --replicas=0
+	echo -n "Delete pvc : " && kubectl delete pvc search-redisgraph-pvc-0
+	echo -n "Delete statefulset : " && kubectl delete statefulset search-redisgraph
+	echo "Waiting 4 minutes for the redisgraph pod to get Ready... " && sleep 240
+    count=0
+	while true ; do
+	  SEARCHOPERATOR=$(kubectl get searchoperator searchoperator -n open-cluster-management -o json | jq '.status.persistence')
+	  echo $SEARCHOPERATOR
+	  count=`expr $count + 1`
+	  if [[ "$SEARCHOPERATOR" == "\"Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim\"" ]]
+	  then
+	     echo "SUCCESS - Redisgraph Pod Ready"
+		 break
+	  fi
+	  echo "No Success yet ..Sleeping for 1s"
+	  sleep 1s
+	  if [ $count -gt 60 ]
+	  then
+	     echo "FAILED - Setting up Redisgraph Pod"
+		 exit 1
+	  fi
+	done 
 }
 
 deploy
