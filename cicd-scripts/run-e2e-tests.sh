@@ -299,7 +299,6 @@ test_update_podresource_search_operator() {
 	  if [[ "$REDISMEMORYLIMIT" == "\"2Gi\"" ]]
 	  then
 	     echo "SUCCESS - Redisgraph Pod Ready with updated memory limit"
-		 exit 0
 	  fi
 	  echo "No Success yet ..Sleeping for 1s"
 	  sleep 1s
@@ -327,7 +326,7 @@ test_fallback_emptydir() {
 	  if [[ "$SEARCHOPERATOR" == "\"Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim\"" ]]
 	  then
 	     echo "SUCCESS - Redisgraph Pod Ready"
-		 break
+		 exit 0
 	  fi
 	  echo "No Success yet ..Sleeping for 1s"
 	  sleep 1s
