@@ -309,6 +309,11 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 				},
 				Spec: v1.PodSpec{
 					ServiceAccountName: "search-operator",
+					Tolerations: []v1.Toleration{{
+						Key:      "node-role.kubernetes.io/infra",
+						Effect:   v1.TaintEffectNoSchedule,
+						Operator: v1.TolerationOpExists,
+					}},
 					ImagePullSecrets: []v1.LocalObjectReference{{
 						Name: cr.Spec.PullSecret,
 					}},
