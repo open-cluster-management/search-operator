@@ -445,7 +445,10 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 			}
 		}
 	}
-
+	if cr.Spec.NodeSelector != nil {
+		sset.Spec.Template.Spec.NodeSelector = cr.Spec.NodeSelector
+		log.Info("Added Node Selector")
+	}
 	if err := ctrl.SetControllerReference(cr, sset, r.Scheme); err != nil {
 		log.Info("Cannot set statefulSet OwnerReference", err.Error())
 	}
