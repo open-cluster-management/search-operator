@@ -44,6 +44,7 @@ type SearchOperatorStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:shortName="srcho"
 
 // SearchOperator is the Schema for the searchoperators API
 type SearchOperator struct {
@@ -65,12 +66,16 @@ type SearchOperatorList struct {
 
 type PodResource struct {
 	// Request memory
+	// +kubebuilder:validation:Pattern:="[0-9\\.]+(G|Gi|M|Mi|K|Ki)?"
 	RequestMemory string `json:"request_memory"`
 	// Request CPU
+	// +kubebuilder:validation:Pattern:="[0-9\\.]+m?"
 	RequestCPU string `json:"request_cpu"`
 	// Limit Memory
+	// +kubebuilder:validation:Pattern:="[0-9\\.]+(G|Gi|M|Mi|K|Ki)?"
 	LimitMemory string `json:"limit_memory"`
 	// Limit CPU
+	// +kubebuilder:validation:Pattern:="[0-9\\.]+m?"
 	LimitCPU string `json:"limit_cpu,omitempty"`
 }
 

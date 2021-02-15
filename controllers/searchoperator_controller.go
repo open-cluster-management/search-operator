@@ -9,21 +9,24 @@ import (
 	"math/big"
 	"os"
 	"reflect"
+	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/intstr"
+	newerr "errors"
 
 	"github.com/go-logr/logr"
 	searchv1alpha1 "github.com/open-cluster-management/search-operator/api/v1alpha1"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -41,10 +44,22 @@ type SearchOperatorReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+type StartingSpec struct {
+	allowdegrade bool
+	withPVC      bool
+	custSpec     searchv1alpha1.SearchCustomizationSpec
+}
+type specList struct {
+	desiredSpec  searchv1alpha1.SearchCustomizationSpec
+	startingSpec StartingSpec
+}
+
 const (
-	appName                   = "search"
-	component                 = "redisgraph"
-	statefulSetName           = "search-redisgraph"
+	appName         = "search"
+	component       = "redisgraph"
+	statefulSetName = "search-redisgraph"
+	podName         = "search-redisgraph-0"
+
 	redisNotRunning           = "Redisgraph Pod not running"
 	statusUsingPVC            = "Redisgraph is using PersistenceVolumeClaim"
 	statusDegradedEmptyDir    = "Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim"
@@ -55,23 +70,84 @@ const (
 	statusNoPersistence       = "Redisgraph pod running with persistence disabled"
 	redisUser                 = int64(10001)
 	defaultPvcName            = "search-redisgraph-pvc-0"
+	noMatchSpec               = "Spec of the current running redisgraph Pod  doesn't match desired Spec"
 )
 
 var (
-	pvcName              = "search-redisgraph-pvc-0"
-	waitSecondsForPodChk = 180 //Wait for 3 minutes
-	log                  = logf.Log.WithName("searchoperator")
-	persistence          = true
-	allowdegrade         = true
-	storageClass         = ""
-	storageSize          = "10Gi"
-	namespace            = os.Getenv("WATCH_NAMESPACE")
+	reconcileLoopCount      = 0
+	pvcName                 = "search-redisgraph-pvc-0"
+	waitSecondsForPodChk    = 180 //Wait for 3 minutes
+	log                     = logf.Log.WithName("searchoperator")
+	persistence             = true
+	allowdegrade            = true
+	storageClass            = ""
+	storageSize             = "10Gi"
+	namespace               = os.Getenv("WATCH_NAMESPACE")
+	redisgraphMemoryRequest = "128Mi"
+	redisgraphMemoryLimit   = "4Gi"
 )
-var startingSpec searchv1alpha1.SearchCustomizationSpec
+
+func (r *SearchOperatorReconciler) doNotRequeue() (ctrl.Result, error) {
+	return ctrl.Result{}, nil
+}
+func (r *SearchOperatorReconciler) requeueOnErr(err error) (ctrl.Result, error) {
+	return ctrl.Result{}, err
+}
+func (r *SearchOperatorReconciler) requeueAfter(duration time.Duration, err error) (ctrl.Result, error) {
+	return ctrl.Result{RequeueAfter: duration}, err
+}
+
+func setDefaultValues() {
+	persistence = true
+	allowdegrade = true
+	storageClass = ""
+	storageSize = "10Gi"
+	pvcName = defaultPvcName
+	redisgraphMemoryRequest = "128Mi"
+	redisgraphMemoryLimit = "4Gi"
+}
+
+func setCustomValues(custom *searchv1alpha1.SearchCustomization) {
+	if custom.Spec.Persistence != nil && *custom.Spec.Persistence == false {
+		persistence = false
+	} else {
+		persistence = true
+	}
+	// Allowdegrade mode helps the user to set the controller from switching back to emptydir - and debug users configuration
+	allowdegrade = false
+	storageClass = ""
+	storageSize = "10Gi"
+	pvcName = defaultPvcName
+	redisgraphMemoryRequest = "128Mi"
+	redisgraphMemoryLimit = "4Gi"
+	if custom.Spec.StorageClass != "" {
+		storageClass = custom.Spec.StorageClass
+		pvcName = storageClass + "-search-redisgraph-0"
+	}
+	if custom.Spec.StorageSize != "" {
+		storageSize = custom.Spec.StorageSize
+	}
+	if custom.Spec.RedisgraphMemoryLimit != "" {
+		redisgraphMemoryLimit = custom.Spec.RedisgraphMemoryLimit
+	}
+	if custom.Spec.RedisgraphMemoryRequest != "" {
+		redisgraphMemoryRequest = custom.Spec.RedisgraphMemoryRequest
+	}
+
+	//if persistence is false, don't use the storageClass and storagesize provided
+	if !persistence {
+		storageClass = ""
+		storageSize = ""
+	}
+}
 
 func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+
 	_ = context.Background()
 	_ = r.Log.WithValues("searchoperator", req.NamespacedName)
+	//TODO: Reset after value reaches max value
+	reconcileLoopCount++
+	fmt.Println("******************************RECONCILE LOOP COUNT: ", reconcileLoopCount, " ******************************")
 	// Fetch the SearchOperator instance
 	instance := &searchv1alpha1.SearchOperator{}
 	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: "searchoperator", Namespace: req.Namespace}, instance)
@@ -80,155 +156,270 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
-			return ctrl.Result{}, nil
+			return r.doNotRequeue()
 		}
 		// Error reading the object - requeue the request.
-		return ctrl.Result{}, err
+		return r.requeueOnErr(err)
 	}
 
 	// Fetch the SearchCustomization instance
 	custom := &searchv1alpha1.SearchCustomization{}
 	customValuesInuse := false
-	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: "searchcustomization", Namespace: req.Namespace}, custom)
+	desiredSpec := searchv1alpha1.SearchCustomizationSpec{}
+	var startingSpec StartingSpec
+
+	custom, err = fetchSrchC(r.Client, custom, req.Namespace)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Set the values to defult
-			persistence = true
-			allowdegrade = true
-			storageClass = ""
-			storageSize = "10Gi"
-			pvcName = defaultPvcName
-			startingSpec = searchv1alpha1.SearchCustomizationSpec{}
+			setDefaultValues()
+
+			// startingCustSpec := searchv1alpha1.SearchCustomizationSpec{Persistence: &persistence, StorageClass: storageClass,
+			// 	RedisgraphMemoryLimit: redisgraphMemoryLimit, RedisgraphMemoryRequest: redisgraphMemoryRequest}
+			// startingSpec1 = StartingSpec{custSpec: startingCustSpec, allowdegrade: allowdegrade}
+			fmt.Printf("startingSpec without CustCR: Persistence: %+v, Spec: %+v\n", *&startingSpec.custSpec.Persistence, startingSpec)
 		} else {
-			return ctrl.Result{}, err
+			return r.requeueOnErr(err)
 		}
 
 	} else {
-		if custom.Spec.Persistence != nil && *custom.Spec.Persistence == false {
-			persistence = false
-		} else {
-			persistence = true
-		}
-		// Allowdegrade mode helps the user to set the controller from switching back to emptydir - and debug users configuration
-		allowdegrade = false
-		storageClass = ""
-		storageSize = "10Gi"
-		pvcName = defaultPvcName
-		if custom.Spec.StorageClass != "" {
-			storageClass = custom.Spec.StorageClass
-			pvcName = storageClass + "-search-redisgraph-0"
-		}
-		if custom.Spec.StorageSize != "" {
-			storageSize = custom.Spec.StorageSize
-		}
+		setCustomValues(custom)
 		//set the  user provided values
 		customValuesInuse = true
-		startingSpec = custom.Spec
-		r.Log.Info(fmt.Sprintf("Storage %s", storageSize))
+		desiredSpec = custom.Spec
+		// startingCustSpec := searchv1alpha1.SearchCustomizationSpec{Persistence: &persistence, StorageClass: storageClass,
+		// 	RedisgraphMemoryLimit: redisgraphMemoryLimit, RedisgraphMemoryRequest: redisgraphMemoryRequest}
+		// startingSpec1 = StartingSpec{custSpec: startingCustSpec, allowdegrade: allowdegrade}
+
+		// fmt.Println("startingSpec with CustCR: ", startingSpec1)
 	}
+	startingCustSpec := searchv1alpha1.SearchCustomizationSpec{Persistence: &persistence, StorageClass: storageClass,
+		RedisgraphMemoryLimit: redisgraphMemoryLimit, RedisgraphMemoryRequest: redisgraphMemoryRequest}
+	startingSpec = StartingSpec{custSpec: startingCustSpec, allowdegrade: allowdegrade}
+	fmt.Printf("startingSpec: Persistence: %+v, Spec: %+v\n", *&startingSpec.custSpec.Persistence, startingSpec)
 
 	r.Log.Info("Checking if customization CR is created..", " Custom Values In use? ", customValuesInuse)
 	r.Log.Info("Values in use: ", "persistence? ", persistence, " storageClass? ", storageClass,
 		" storageSize? ", storageSize, " fallbackToEmptyDir? ", allowdegrade)
-
+	specList := specList{desiredSpec: desiredSpec, startingSpec: startingSpec}
 	// Create secret if not found
 	err = r.setupSecret(r.Client, instance)
 	if err != nil {
 		// Error setting up secret - requeue the request.
-		return ctrl.Result{}, err
+		return r.requeueOnErr(err)
 	}
-
+	//TODO: Check if default storage class present - move to a function
 	//Read the searchoperator status
 	persistenceStatus := instance.Status.PersistenceStatus
 
-	// Setup RedisGraph Deployment
+	scPresent := storageClassPresent(r.Client, storageClass)
+
 	r.Log.Info(fmt.Sprintf("Config in  Use Persistence/AllowDegrade %t/%t", persistence, allowdegrade))
+
 	if persistence {
-		//If running PVC deployment nothing to do
-		if persistenceStatus == statusUsingPVC && isStatefulSetAvailable(r.Client) && r.isPodRunning(true, 1) {
-			return ctrl.Result{}, nil
-		}
-		//If running degraded deployment AND AllowDegradeMode is set
-		if allowdegrade && persistenceStatus == statusDegradedEmptyDir && isStatefulSetAvailable(r.Client) && r.isPodRunning(false, 1) {
-			return ctrl.Result{}, nil
-		}
-		pvcError := setupVolume(r.Client)
-		if pvcError != nil {
-			return ctrl.Result{}, pvcError
-		}
-		r.executeDeployment(r.Client, instance, true, persistence)
-		podReady := r.isPodRunning(true, waitSecondsForPodChk)
-		if podReady {
-			//Write Status
-			err := updateCRs(r.Client, instance, statusUsingPVC,
-				custom, persistence, storageClass, storageSize, customValuesInuse)
-			if err != nil {
-				return ctrl.Result{}, err
+		flag := scPresent || customValuesInuse
+		switch flag {
+		case true:
+			fmt.Println("Try setting persistence")
+			specList.startingSpec.withPVC = true
+			// err.Error() == noMatchSpec
+			podRunning, podRunningErr := r.isPodRunning(true, 1, specList)
+			if persistenceStatus == statusUsingPVC && isStatefulSetAvailable(r.Client) && (podRunning && podRunningErr == nil) {
+				fmt.Println("Returning from CASE TRUE: ", flag)
+
+				return r.doNotRequeue()
 			}
-		}
-		//If Pod cannot be scheduled rollback to EmptyDir if AllowDegradeMode is set
-		if !podReady && allowdegrade {
+			pvcError := setupVolume(r.Client)
+			if pvcError != nil {
+				return r.requeueOnErr(pvcError)
+			}
+			r.executeDeployment(r.Client, instance, true, persistence)
+			podReady, err := r.isPodRunning(true, waitSecondsForPodChk, specList)
+			// if err != nil && err.Error() == noMatchSpec {
+			// 	sts, err := fetchSts(r.Client, namespace)
+			// 	if err == nil {
+			// 		fmt.Print("sts found\n", sts.Name)
+			// 	} else {
+			// 		fmt.Println("error fetching sts")
+			// 	}
+			// }
+			if podReady && err == nil {
+				//Write Status
+				err := updateCRs(r.Client, instance, statusUsingPVC,
+					custom, persistence, storageClass, storageSize, customValuesInuse)
+				if err != nil {
+					return r.requeueOnErr(err)
+				}
+				r.doNotRequeue()
+			}
+			if !podReady && !allowdegrade || err != nil {
+				r.Log.Info("Unable to create Redisgraph Deployment using PVC ")
+				//Write Status, delete statefulset and requeue
+				r.reconcileOnError(instance, statusFailedUsingPVC, custom, false, "", "", customValuesInuse)
+				return r.requeueAfter(5*time.Second, newerr.New(redisNotRunning))
+				// return ctrl.Result{RequeueAfter: 5 * time.Second}, fmt.Errorf(redisNotRunning)
+			}
+			fmt.Println("NOT Handled in CASE TRUE: ", flag)
+
+		case false:
+			fmt.Println("Degrade to emptyDir")
+			specList.startingSpec.withPVC = false
+			podRunning, podRunningErr := r.isPodRunning(false, 1, specList)
+
+			if allowdegrade && persistenceStatus == statusDegradedEmptyDir && isStatefulSetAvailable(r.Client) && (podRunning && podRunningErr == nil) {
+				fmt.Println("Returning from CASE FALSE: ", flag)
+				return r.doNotRequeue()
+			}
 			r.Log.Info("Degrading Redisgraph deployment to use empty dir.")
+			//TODO: Check if deletion is necessary
 			err := deleteRedisStatefulSet(r.Client)
 			if err != nil {
-				return ctrl.Result{}, err
+				return r.requeueOnErr(err)
 			}
 			err = deletePVC(r.Client)
 			if err != nil {
-				return ctrl.Result{}, err
+				return r.requeueOnErr(err)
 			}
 			r.executeDeployment(r.Client, instance, false, persistence)
-			if r.isPodRunning(false, waitSecondsForPodChk) {
+			podReady, err := r.isPodRunning(false, waitSecondsForPodChk, specList)
+
+			if podReady && err == nil {
 				//Write Status
 				err := updateCRs(r.Client, instance, statusDegradedEmptyDir,
 					custom, false, "", "", customValuesInuse)
 				if err != nil {
-					return ctrl.Result{}, err
-				} else {
-					return ctrl.Result{}, nil
+					return r.requeueOnErr(err)
 				}
-			} else {
-				r.Log.Info("Unable to create Redisgraph Deployment in Degraded Mode")
-				//Write Status, delete statefulset and requeue
-				r.reconcileOnError(instance, statusFailedDegraded, custom, false, "", "", customValuesInuse)
-				return ctrl.Result{RequeueAfter: 5 * time.Second}, fmt.Errorf(redisNotRunning)
+				return r.doNotRequeue()
+
 			}
-		}
-		if !podReady && !allowdegrade {
-			r.Log.Info("Unable to create Redisgraph Deployment using PVC ")
+			r.Log.Info("Unable to create Redisgraph Deployment in Degraded Mode")
 			//Write Status, delete statefulset and requeue
-			r.reconcileOnError(instance, statusFailedUsingPVC, custom, false, "", "", customValuesInuse)
-			return ctrl.Result{RequeueAfter: 5 * time.Second}, fmt.Errorf(redisNotRunning)
+			r.reconcileOnError(instance, statusFailedDegraded, custom, false, "", "", customValuesInuse)
+			// return ctrl.Result{RequeueAfter: 5 * time.Second}, fmt.Errorf(redisNotRunning)
+			return r.requeueAfter(5*time.Second, newerr.New(redisNotRunning))
+
+			// fmt.Println("NOT Handled in CASE FALSE: ", flag)
+
 		}
 	} else {
-		if isStatefulSetAvailable(r.Client) && r.isPodRunning(false, 1) &&
+		fmt.Println("Try setting no persistence")
+
+		podRunning, podRunningErr := r.isPodRunning(false, 1, specList)
+		if isStatefulSetAvailable(r.Client) && (podRunning && podRunningErr == nil) &&
 			persistenceStatus == statusNoPersistence {
 			return ctrl.Result{}, nil
 		}
 		r.Log.Info("Using Deployment with persistence disabled")
 		r.executeDeployment(r.Client, instance, false, persistence)
-		if r.isPodRunning(false, waitSecondsForPodChk) {
+		podReady, _ := r.isPodRunning(false, waitSecondsForPodChk, specList)
+		if podReady && err == nil {
 			//Write Status, if error - requeue
 			err := updateCRs(r.Client, instance, statusNoPersistence, custom, false, "", "", customValuesInuse)
 			if err != nil {
-				return ctrl.Result{}, err
+				return r.requeueOnErr(err)
 			}
 		} else {
 			r.Log.Info("Unable to create Redisgraph Deployment with persistence disabled")
 			//Write Status, delete statefulset and requeue
 			r.reconcileOnError(instance, statusFailedNoPersistence, custom, false, "", "", customValuesInuse)
-			return ctrl.Result{RequeueAfter: 5 * time.Second}, fmt.Errorf(redisNotRunning)
+			// return ctrl.Result{RequeueAfter: 5 * time.Second}, fmt.Errorf(redisNotRunning)
+			return r.requeueAfter(5*time.Second, newerr.New(redisNotRunning))
 		}
-
 	}
-	return ctrl.Result{}, nil
+	return r.doNotRequeue()
+
+	// if persistence {
+	// 	//If running PVC deployment nothing to do
+	// 	// if persistenceStatus == statusUsingPVC && isStatefulSetAvailable(r.Client) && r.isPodRunning(true, 1, specList) {
+	// 	// 	return ctrl.Result{}, nil
+	// 	// }
+	// 	// //If running degraded deployment AND AllowDegradeMode is set
+	// 	// if allowdegrade && persistenceStatus == statusDegradedEmptyDir && isStatefulSetAvailable(r.Client) && r.isPodRunning(false, 1, specList) {
+	// 	// 	return ctrl.Result{}, nil
+	// 	// }
+	// 	// pvcError := setupVolume(r.Client)
+	// 	// if pvcError != nil {
+	// 	// 	return ctrl.Result{}, pvcError
+	// 	// }
+	// 	// r.executeDeployment(r.Client, instance, true, persistence)
+	// 	// podReady := r.isPodRunning(true, waitSecondsForPodChk, specList)
+	// 	// if podReady {
+	// 	// 	//Write Status
+	// 	// 	err := updateCRs(r.Client, instance, statusUsingPVC,
+	// 	// 		custom, persistence, storageClass, storageSize, customValuesInuse)
+	// 	// 	if err != nil {
+	// 	// 		return ctrl.Result{}, err
+	// 	// 	}
+	// 	// }
+	// 	//If Pod cannot be scheduled rollback to EmptyDir if AllowDegradeMode is set
+	// 	// if !podReady && allowdegrade {
+	// 	// r.Log.Info("Degrading Redisgraph deployment to use empty dir.")
+	// 	// err := deleteRedisStatefulSet(r.Client)
+	// 	// if err != nil {
+	// 	// 	return ctrl.Result{}, err
+	// 	// }
+	// 	// err = deletePVC(r.Client)
+	// 	// if err != nil {
+	// 	// 	return ctrl.Result{}, err
+	// 	// }
+	// 	// r.executeDeployment(r.Client, instance, false, persistence)
+	// 	// if r.isPodRunning(false, waitSecondsForPodChk, specList) {
+	// 	// 	//Write Status
+	// 	// 	err := updateCRs(r.Client, instance, statusDegradedEmptyDir,
+	// 	// 		custom, false, "", "", customValuesInuse)
+	// 	// 	if err != nil {
+	// 	// 		return ctrl.Result{}, err
+	// 	// 	} else {
+	// 	// 		return ctrl.Result{}, nil
+	// 	// 	}
+	// 	// } else {
+	// 	// 	r.Log.Info("Unable to create Redisgraph Deployment in Degraded Mode")
+	// 	// 	//Write Status, delete statefulset and requeue
+	// 	// 	r.reconcileOnError(instance, statusFailedDegraded, custom, false, "", "", customValuesInuse)
+	// 	// 	// return ctrl.Result{RequeueAfter: 5 * time.Second}, fmt.Errorf(redisNotRunning)
+	// 	// 	return r.requeueAfter(5*time.Second, newerr.New(redisNotRunning))
+
+	// 	// }
+	// 	// }
+	// 	// if !podReady && !allowdegrade {
+	// 	// 	r.Log.Info("Unable to create Redisgraph Deployment using PVC ")
+	// 	// 	//Write Status, delete statefulset and requeue
+	// 	// 	r.reconcileOnError(instance, statusFailedUsingPVC, custom, false, "", "", customValuesInuse)
+	// 	// 	return r.requeueAfter(5*time.Second, newerr.New(redisNotRunning))
+	// 	// 	// return ctrl.Result{RequeueAfter: 5 * time.Second}, fmt.Errorf(redisNotRunning)
+	// 	// }
+	// } else {
+	// 	if isStatefulSetAvailable(r.Client) && r.isPodRunning(false, 1, specList) &&
+	// 		persistenceStatus == statusNoPersistence {
+	// 		return ctrl.Result{}, nil
+	// 	}
+	// 	r.Log.Info("Using Deployment with persistence disabled")
+	// 	r.executeDeployment(r.Client, instance, false, persistence)
+	// 	if r.isPodRunning(false, waitSecondsForPodChk, specList) {
+	// 		//Write Status, if error - requeue
+	// 		err := updateCRs(r.Client, instance, statusNoPersistence, custom, false, "", "", customValuesInuse)
+	// 		if err != nil {
+	// 			return ctrl.Result{}, err
+	// 		}
+	// 	} else {
+	// 		r.Log.Info("Unable to create Redisgraph Deployment with persistence disabled")
+	// 		//Write Status, delete statefulset and requeue
+	// 		r.reconcileOnError(instance, statusFailedNoPersistence, custom, false, "", "", customValuesInuse)
+	// 		// return ctrl.Result{RequeueAfter: 5 * time.Second}, fmt.Errorf(redisNotRunning)
+	// 		return r.requeueAfter(5*time.Second, newerr.New(redisNotRunning))
+
+	// 	}
+
+	// }
 }
 
 func (r *SearchOperatorReconciler) reconcileOnError(instance *searchv1alpha1.SearchOperator, status string,
 	custom *searchv1alpha1.SearchCustomization, persistence bool, storageClass string,
 	storageSize string, customValuesInuse bool) {
+	fmt.Println("In reconcileOnError: going to update CRs and deleteRedisStatefulSet")
 	var err error
 	if err = updateCRs(r.Client, instance, status, custom, false,
 		storageClass, storageSize, customValuesInuse); err != nil {
@@ -241,6 +432,8 @@ func (r *SearchOperatorReconciler) reconcileOnError(instance *searchv1alpha1.Sea
 
 func (r *SearchOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	watchNamespace := os.Getenv("WATCH_NAMESPACE")
+	fmt.Println("In SetupWithManager with watchNamespace: ", watchNamespace)
+	r.Log.Info("In SetupWithManagerr")
 	pred := predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
 			return e.Meta.GetNamespace() == watchNamespace
@@ -284,8 +477,43 @@ func int32Ptr(i int32) *int32 { return &i }
 
 func int64Ptr(i int64) *int64 { return &i }
 
+func storageClassPresent(c client.Client, storageClassName string) bool {
+	scList := &storagev1.StorageClassList{}
+	//opts := []client.ListOption{client.MatchingFields{"metadata.annotations['storageclass.kubernetes.io/is-default-class']": "true"}}
+	opts := []client.ListOption{}
+	err := c.List(context.TODO(), scList, opts...)
+	fmt.Println("err listing sc: ", err)
+	if len(scList.Items) > 0 {
+		fmt.Println("YYYY storageclass defined: ")
+	} else {
+		fmt.Println("XXXXX No storageclass defined")
+	}
+	defSCPresent := false
+	for _, sclass := range scList.Items {
+		if storageClassName == "" {
+			if sclass.GetObjectMeta().GetAnnotations()["storageclass.kubernetes.io/is-default-class"] == "true" {
+				fmt.Println("YYYY Default storageclass defined: ", sclass.Name)
+				defSCPresent = true
+				break
+			}
+		} else {
+			if sclass.Name == storageClassName {
+				defSCPresent = true
+				fmt.Println("YYYY Expected storageclass defined: ", sclass.Name)
+
+				break
+			}
+		}
+	}
+	if !defSCPresent {
+		fmt.Println("XXXXXXX Default/Expected storageclass NOT defined")
+	}
+	return defSCPresent
+}
+
 func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOperator,
 	rdbVolumeSource v1.VolumeSource, saverdb string) *appv1.StatefulSet {
+	resources := r.memorySettings(cr)
 	bool := false
 	sset := &appv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -365,15 +593,7 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 									},
 								},
 							},
-							Resources: v1.ResourceRequirements{
-								Limits: v1.ResourceList{
-									"memory": resource.MustParse(cr.Spec.Redisgraph_Resource.LimitMemory),
-								},
-								Requests: v1.ResourceList{
-									"cpu":    resource.MustParse(cr.Spec.Redisgraph_Resource.RequestCPU),
-									"memory": resource.MustParse(cr.Spec.Redisgraph_Resource.RequestMemory),
-								},
-							},
+							Resources:                resources,
 							TerminationMessagePolicy: "File",
 							TerminationMessagePath:   "/dev/termination-log",
 							SecurityContext: &v1.SecurityContext{
@@ -454,6 +674,7 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 func updateCRs(kclient client.Client, operatorCR *searchv1alpha1.SearchOperator, status string,
 	customizationCR *searchv1alpha1.SearchCustomization, persistence bool, storageClass string,
 	storageSize string, customValuesInuse bool) error {
+	log.Info("------------Updating CRs------------might trigger a reconcile loop")
 	var err error
 	err = updateOperatorCR(kclient, operatorCR, status)
 	if err != nil {
@@ -472,7 +693,7 @@ func updateOperatorCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, 
 	found := &searchv1alpha1.SearchOperator{}
 	err := kclient.Get(context.TODO(), types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace}, found)
 	if err != nil {
-		log.Error(err, fmt.Sprintf("Failed to get SearchOperator %s/%s ", cr.Namespace, cr.Name))
+		log.Info(fmt.Sprintf("Failed to get SearchOperator %s/%s ", cr.Namespace, cr.Name), "Error: ", err.Error())
 		return err
 	}
 	cr.Status.PersistenceStatus = status
@@ -481,11 +702,13 @@ func updateOperatorCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, 
 		if apierrors.IsConflict(err) {
 			log.Info("Failed to update status Object has been modified")
 		}
-		log.Error(err, fmt.Sprintf("Failed to update %s/%s status ", cr.Namespace, cr.Name))
+		// log.Error(err, fmt.Sprintf("Failed to update %s/%s status ", cr.Namespace, cr.Name))
+		log.Info(fmt.Sprintf("Failed to update SearchOperator %s/%s status", cr.Namespace, cr.Name), "Error: ", err.Error())
+
 		return err
-	} else {
-		log.Info(fmt.Sprintf("Updated CR status with persistence %s  ", cr.Status.PersistenceStatus))
 	}
+	log.Info(fmt.Sprintf("Updated CR status with persistence %s  ", cr.Status.PersistenceStatus))
+
 	return nil
 }
 
@@ -500,16 +723,29 @@ func updateCustomizationCR(kclient client.Client, cr *searchv1alpha1.SearchCusto
 	cr.Status.Persistence = persistence
 	cr.Status.StorageClass = storageClass
 	cr.Status.StorageSize = storageSize
+
+	podList, err := ftchPodList(kclient)
+	for _, pod := range podList.Items {
+		if pod.Name == podName {
+			for _, container := range pod.Spec.Containers {
+				if container.Name == "redisgraph" {
+					cr.Status.RedisgraphMemoryLimit = container.Resources.Limits.Memory().String()
+					cr.Status.RedisgraphMemoryRequest = container.Resources.Requests.Memory().String()
+					break
+				}
+			}
+		}
+	}
 	err = kclient.Status().Update(context.TODO(), cr)
 	if err != nil {
 		if apierrors.IsConflict(err) {
-			log.Info("Failed to update status Object has been modified")
+			log.Info("Failed to update status. Object has been modified")
 		}
 		log.Error(err, fmt.Sprintf("Failed to update %s/%s status ", cr.Namespace, cr.Name))
 		return err
-	} else {
-		log.Info(fmt.Sprintf("Updated CR status with custom persistence %t ", cr.Status.Persistence))
 	}
+	log.Info(fmt.Sprintf("Updated CR status with custom persistence %t ", cr.Status.Persistence))
+
 	return nil
 }
 
@@ -530,7 +766,7 @@ func updateRedisStatefulSet(client client.Client, deployment *appv1.StatefulSet)
 		}
 	} else {
 		if !reflect.DeepEqual(found.Spec, deployment.Spec) {
-			deployment.ObjectMeta.ResourceVersion = found.ObjectMeta.ResourceVersion
+			// deployment.ObjectMeta.ResourceVersion = found.ObjectMeta.ResourceVersion
 			err = client.Update(context.TODO(), deployment)
 			if err != nil {
 				log.Error(err, "Failed to update deployment")
@@ -623,10 +859,10 @@ func setupVolume(client client.Client) error {
 			log.Info("Error creating a new PVC ", logKeyPVCName, pvcName)
 			log.Info(err.Error())
 			return err
-		} else {
-			log.Info("Created a new PVC ", logKeyPVCName, pvcName)
-			return nil
 		}
+		log.Info("Created a new PVC ", logKeyPVCName, pvcName)
+		return nil
+
 	} else if err != nil {
 		log.Info("Error finding PVC ", logKeyPVCName, pvcName)
 		//return False and error if there is Error
@@ -681,70 +917,188 @@ func isStatefulSetAvailable(kclient client.Client) bool {
 	return true
 }
 
-func (r *SearchOperatorReconciler) isPodRunning(withPVC bool, waitSeconds int) bool {
+func runningPodSpec(kclient client.Client, pod v1.Pod) StartingSpec {
+	log.Info("Checking Redisgraph Pod Status...")
+	//Keep checking status until waitSeconds
+	// We assume its not running
+	// podName := "search-redisgraph-0"
+	persistence := true
+	runningSpec := StartingSpec{}
+	custom := &searchv1alpha1.SearchCustomization{}
+	_, err := fetchSrchC(kclient, custom, namespace)
+	if errors.IsNotFound(err) {
+		runningSpec.allowdegrade = true
+	}
+	if err == nil {
+		runningSpec.allowdegrade = false
+	}
+
+	// err := client.Get(context.TODO(), types.NamespacedName{Name: podName, Namespace: namespace}, pod)
+	// fmt.Println("Error fetching redis pod: ", err)
+
+	// runningCustSpec := searchv1alpha1.SearchCustomizationSpec{} //desiredSpec{}
+	for _, vol := range pod.Spec.Volumes {
+		if vol.Name == "persist" {
+			persistence = true
+			runningSpec.custSpec.Persistence = &persistence
+			fmt.Println("Setting runningSpec.custSpec.Persistence to ", persistence)
+			if vol.PersistentVolumeClaim != nil {
+				runningSpec.withPVC = true
+				if vol.PersistentVolumeClaim.ClaimName != defaultPvcName {
+					runningSpec.custSpec.StorageClass = strings.TrimSuffix(vol.PersistentVolumeClaim.ClaimName, "-search-redisgraph-0")
+				}
+				if vol.PersistentVolumeClaim != nil && vol.PersistentVolumeClaim.ClaimName == pvcName {
+					log.Info("***** RedisGraph Pod with PVC Running *****")
+				}
+			} else if vol.EmptyDir != nil { //TODO: Check if this is needed
+				log.Info("***** RedisGraph Pod with EmptyDir Running *****")
+				runningSpec.withPVC = false
+				runningSpec.custSpec.StorageClass = ""
+			}
+			break
+		}
+
+		persistence = false
+		runningSpec.custSpec.Persistence = &persistence
+	}
+	for _, container := range pod.Spec.Containers {
+		if container.Name == "redisgraph" {
+			runningSpec.custSpec.RedisgraphMemoryLimit = container.Resources.Limits.Memory().String()
+			runningSpec.custSpec.RedisgraphMemoryRequest = container.Resources.Requests.Memory().String()
+			break
+		}
+	}
+
+	// log.Info("Redisgraph Pod not Running...")
+	return runningSpec
+}
+
+func ftchPodList(kclient client.Client) (*corev1.PodList, error) {
+	fmt.Println("In ftchPodList fn. Fetching redisgraph pod fresh")
+	podList := &corev1.PodList{}
+	opts := []client.ListOption{client.MatchingLabels{"app": appName, "component": "redisgraph"}}
+	err := kclient.List(context.TODO(), podList, opts...)
+	return podList, err
+}
+func (r *SearchOperatorReconciler) isPodRunning(withPVC bool, waitSeconds int, specList specList) (bool, error) {
+	fmt.Println("^^^^^^^^^^^^^^^^waitSeconds: ", waitSeconds, " ^^^^^^^^^^^^^^^^^^")
+	var err error
 	log.Info("Checking Redisgraph Pod Status...")
 	//Keep checking status until waitSeconds
 	// We assume its not running
 	count := 0
 	for count < waitSeconds {
-		podList := &corev1.PodList{}
-		opts := []client.ListOption{client.MatchingLabels{"app": appName, "component": "redisgraph"}}
-		err := r.Client.List(context.TODO(), podList, opts...)
+		podList, err := ftchPodList(r.Client)
 		if err != nil {
 			log.Info("Error listing redisgraph pods. ", err)
-			return false
+			return false, err
 		}
 		for _, item := range podList.Items {
-			if isReady(item, withPVC) {
-				log.Info("Redisgraph Pod Running...")
-				return true
+			ready, err := r.isReady(item, withPVC, specList.startingSpec)
+			if ready && (err != nil && err.Error() == noMatchSpec) {
+				log.Info("In isPodRunning: Error is noMatchSpec.. Returning true")
+				if count == waitSeconds {
+					return false, err
+				}
 			}
+			if ready && err == nil {
+				log.Info("Redisgraph Pod Running...")
+				return true, nil
+			}
+			// if err != nil && err.
 		}
 		count++
+		fmt.Println("Sleeping for a second")
 		time.Sleep(1 * time.Second)
 		// Fetch the SearchCustomization instance
 		custom := &searchv1alpha1.SearchCustomization{}
-		err = r.Client.Get(context.TODO(), types.NamespacedName{Name: "searchcustomization", Namespace: namespace}, custom)
-		if err == nil && !reflect.DeepEqual(custom.Spec, startingSpec) {
-			log.Info("SearchCustomization Spec updated , Reconciling ..")
+		custom, err = fetchSrchC(r.Client, custom, namespace)
+		if err == nil && !reflect.DeepEqual(custom.Spec, specList.desiredSpec) {
+			log.Info("******************************* SearchCustomization Spec updated , Reconciling .. *****************")
 			break
 		}
 
 	}
 	log.Info("Redisgraph Pod not Running...")
-	return false
+	return false, err
 }
 
-func isReady(pod v1.Pod, withPVC bool) bool {
+func (r *SearchOperatorReconciler) isReady(pod v1.Pod, withPVC bool, startingSpec StartingSpec) (bool, error) {
+	fmt.Println("??????????? In isReady() function")
 	for _, status := range pod.Status.Conditions {
 		if status.Reason == "Unschedulable" {
 			log.Info("RedisGraph Pod UnScheduleable - likely PVC mount problem")
-			return false
+			return false, nil
 		}
 	}
+	fmt.Println("withPVC: ", withPVC, " startingSpec.withPVC: ", startingSpec.withPVC)
+
+	runningSpec := StartingSpec{}
 	for _, status := range pod.Status.ContainerStatuses {
 		if status.Ready {
-			for _, env := range pod.Spec.Containers[0].Env {
-				if !withPVC && env.Name == "SAVERDB" && env.Value == "false" {
-					log.Info("RedisGraph Pod Running with Persistence disabled")
-					return true
+
+			runningSpec = runningPodSpec(r.Client, pod)
+			if (*runningSpec.custSpec.Persistence == *startingSpec.custSpec.Persistence) &&
+				(runningSpec.custSpec.StorageClass == startingSpec.custSpec.StorageClass) &&
+				(runningSpec.custSpec.RedisgraphMemoryLimit == startingSpec.custSpec.RedisgraphMemoryLimit) &&
+				(runningSpec.custSpec.RedisgraphMemoryRequest == startingSpec.custSpec.RedisgraphMemoryRequest) &&
+				(runningSpec.allowdegrade == startingSpec.allowdegrade) &&
+				(runningSpec.withPVC == startingSpec.withPVC) {
+
+				fmt.Printf("Running Spec %+v: %+v:\n", *runningSpec.custSpec.Persistence, runningSpec)
+				fmt.Printf("Starting Spec %+v: %+v:\n", *startingSpec.custSpec.Persistence, startingSpec)
+				for _, env := range pod.Spec.Containers[0].Env {
+					if !withPVC && env.Name == "SAVERDB" && env.Value == "false" {
+						log.Info("PAY ATTENTION***** RedisGraph Pod Running with Persistence disabled *****")
+						// return true
+					}
 				}
+				log.Info("***** RedisGraph Pod Running Spec = startingSpec ***** - RETURNING TRUE here")
+				return true, nil
 			}
-			for _, name := range pod.Spec.Volumes {
-				if name.Name != "persist" {
-					continue
-				}
-				if withPVC && name.PersistentVolumeClaim != nil && name.PersistentVolumeClaim.ClaimName == pvcName {
-					log.Info("RedisGraph Pod with PVC Running")
-					return true
-				} else if !withPVC && name.PersistentVolumeClaim == nil {
-					log.Info("RedisGraph Pod with EmptyDir Running")
-					return true
-				}
-			}
+			log.Info("***** RedisGraph Pod Running Spec <> startingSpec *****")
+
+			fmt.Printf("<> Running Spec %+v: %+v:\n", *runningSpec.custSpec.Persistence, runningSpec)
+			fmt.Printf("<> Starting Spec %+v: %+v:\n", *startingSpec.custSpec.Persistence, startingSpec)
+			log.Info(noMatchSpec)
+			log.Info("***** RedisGraph Pod Running Spec <> startingSpec ***** - RETURNING FALSE here")
+
+			return false, fmt.Errorf("%s", noMatchSpec)
+
+		}
+		fmt.Printf("Current UNREADY pod status: %+v \n", status)
+
+	}
+	if runningSpec.custSpec.Persistence != nil {
+		fmt.Printf("<< Running Spec %+v: %+v:\n", *runningSpec.custSpec.Persistence, runningSpec)
+		fmt.Printf("<< Starting Spec %+v: %+v:\n", *startingSpec.custSpec.Persistence, startingSpec)
+	}
+	return false, nil
+}
+func (r *SearchOperatorReconciler) memorySettings(cr *searchv1alpha1.SearchOperator) v1.ResourceRequirements {
+	var memRequest resource.Quantity = resource.MustParse(cr.Spec.Redisgraph_Resource.RequestMemory)
+	var memLimit resource.Quantity = resource.MustParse(cr.Spec.Redisgraph_Resource.LimitMemory)
+
+	//Check if custCR is present
+	custom := &searchv1alpha1.SearchCustomization{}
+	custom, err := fetchSrchC(r.Client, custom, cr.Namespace)
+	if err == nil {
+		if custom.Spec.RedisgraphMemoryRequest != "" {
+			memRequest = resource.MustParse(custom.Spec.RedisgraphMemoryRequest)
+		}
+		if custom.Spec.RedisgraphMemoryLimit != "" {
+			memLimit = resource.MustParse(custom.Spec.RedisgraphMemoryLimit)
 		}
 	}
-	return false
+	return v1.ResourceRequirements{
+		Limits: v1.ResourceList{
+			"memory": memLimit,
+		},
+		Requests: v1.ResourceList{
+			"cpu":    resource.MustParse(cr.Spec.Redisgraph_Resource.RequestCPU),
+			"memory": memRequest,
+		},
+	}
 }
 
 func (r *SearchOperatorReconciler) executeDeployment(client client.Client,
@@ -792,4 +1146,16 @@ func (r *SearchOperatorReconciler) setupSecret(client client.Client, cr *searchv
 		log.Info("Skip reconcile: Secret already exists", "Secret.Namespace", found.Namespace, "Secret.Name", found.Name)
 	}
 	return nil
+}
+
+func fetchSrchC(kclient client.Client, custom *searchv1alpha1.SearchCustomization, namespace string) (*searchv1alpha1.SearchCustomization, error) {
+	err := kclient.Get(context.TODO(), types.NamespacedName{Name: "searchcustomization", Namespace: namespace}, custom)
+	return custom, err
+}
+
+func fetchSts(kclient client.Client, namespace string) (*appv1.StatefulSet, error) {
+
+	found := &appv1.StatefulSet{}
+	err := kclient.Get(context.TODO(), types.NamespacedName{Name: statefulSetName, Namespace: namespace}, found)
+	return found, err
 }

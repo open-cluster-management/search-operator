@@ -59,20 +59,20 @@ spec:
               properties:
                 limit_cpu:
                   description: Limit CPU
+                  pattern: '[0-9\.]+m?'
                   type: string
-                  pattern: "[0-9\\.]+m?"
                 limit_memory:
                   description: Limit Memory
+                  pattern: '[0-9\.]+(G|Gi|M|Mi|K|Ki)?'
                   type: string
-                  pattern: "[0-9\\.]+(G|Gi|M|Mi|K|Ki)?"
                 request_cpu:
                   description: Request CPU
+                  pattern: '[0-9\.]+m?'
                   type: string
-                  pattern: "[0-9\\.]+m?"
                 request_memory:
                   description: Request memory
+                  pattern: '[0-9\.]+(G|Gi|M|Mi|K|Ki)?'
                   type: string
-                  pattern: "[0-9\\.]+(G|Gi|M|Mi|K|Ki)?"
               required:
               - limit_memory
               - request_cpu

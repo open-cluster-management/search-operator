@@ -29,14 +29,25 @@ type SearchCustomizationSpec struct {
 	// +optional
 	StorageClass string `json:"storageClass,omitempty"`
 
-	// Size of the PVC which is used by search-redisgraph pod.
+	// Size of the PVC which is used by search-redisgraph pod. Once PVC is created, updates to size should be done in PVC definition.
 	// +optional
+	// +kubebuilder:validation:Pattern:="^[1-9](Gi)|^[1-9][0-9](Gi)"
 	StorageSize string `json:"storageSize,omitempty"`
 
-	// If set to true, then a PVC is created on the storageClass that is provided.
+	// If set to true, then a PVC is created on the storageClass that is specified.
 	// If there is no storageClass specified, default storageClass is used to persist Redisgraph data.
+	// If set to false, persisting to filesystem is disabled.
 	// +optional
+	// +kubebuilder:printcolumn:name="Persistence",type=boolean,description="If set to true, then a PVC is created on the storageClass that is specified. If there is no storageClass specified, default storageClass is used to persist Redisgraph data. If set to false, persisting to filesystem is disabled."
+	// +kubebuilder:validation:Format:="boolean"
 	Persistence *bool `json:"persistence,omitempty"`
+
+	// If specified, will be used as the request memory for Redisgraph pod
+	// +kubebuilder:validation:Pattern:="[0-9]*(Mi|Gi)"
+	RedisgraphMemoryRequest string `json:"redisgraphMemoryRequest,omitempty"`
+	// If specified, will be used as the limit memory for Redisgraph pod
+	// +kubebuilder:validation:Pattern:="[0-9]*(Mi|Gi)"
+	RedisgraphMemoryLimit string `json:"redisgraphMemoryLimit,omitempty"`
 }
 
 // SearchCustomizationStatus defines the observed state of SearchCustomization.
@@ -46,12 +57,17 @@ type SearchCustomizationStatus struct {
 	StorageSize string `json:"storageSize"`
 
 	Persistence bool `json:"persistence"`
+
+	RedisgraphMemoryRequest string `json:"redisgraphMemoryRequest"`
+
+	RedisgraphMemoryLimit string `json:"redisgraphMemoryLimit"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
 // SearchCustomization is the schema for the search customizations API.
+// +kubebuilder:resource:shortName="srchc"
 type SearchCustomization struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

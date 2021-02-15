@@ -4,3 +4,4 @@ metadata:
   name: searchcustomization
 spec:
   persistence: true
+  storageClass: "gp2-csi"

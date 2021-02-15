@@ -21,7 +21,8 @@ spec:
     status: {}
   validation:
     openAPIV3Schema:
-      description: SearchCustomization is the schema for the search customizations API.
+      description: SearchCustomization is the schema for the search customizations
+        API.
       properties:
         apiVersion:
           description: 'APIVersion defines the versioned schema of this representation
@@ -41,30 +42,50 @@ spec:
           properties:
             persistence:
               description: If set to true, then a PVC is created on the storageClass
-                that is specified. If there is no storageClass specified, default storageClass
-                is used to persist Redisgraph data. If set to false, persisting to filesystem is disabled.
+                that is specified. If there is no storageClass specified, default
+                storageClass is used to persist Redisgraph data. If set to false,
+                persisting to filesystem is disabled.
+              format: boolean
               type: boolean
               pattern: "(true|false)"
+            redisgraphMemoryLimit:
+              description: If specified, will be used as the limit memory for Redisgraph
+                pod
+              pattern: '[0-9]*(Mi|Gi)'
+              type: string
+            redisgraphMemoryRequest:
+              description: If specified, will be used as the request memory for Redisgraph
+                pod
+              pattern: '[0-9]*(Mi|Gi)'
+              type: string
             storageClass:
-              description: If specified, this storageClass is used. Otherwise the default
-                storageClass is used by Kubernetes. 
+              description: If specified this storageClass is used, otherwise the default
+                storageClass is used by Kubernetes. If storageClass is specified,
+                persistence must be set to true.
               type: string
             storageSize:
-              description: Size of the PVC which is used by search-redisgraph pod. Once PVC is created, updates to size should be done in PVC defenition.
+              description: Size of the PVC which is used by search-redisgraph pod.
+                Once PVC is created, updates to size should be done in PVC definition.
+              pattern: ^[1-9](Gi)|^[1-9][0-9](Gi)
               type: string
-              pattern: "^[1-9](Gi)|^[1-9][0-9](Gi)"
           type: object
         status:
           description: SearchCustomizationStatus defines the observed state of SearchCustomization.
           properties:
             persistence:
               type: boolean
+            redisgraphMemoryLimit:
+              type: string
+            redisgraphMemoryRequest:
+              type: string
             storageClass:
               type: string
             storageSize:
               type: string
           required:
           - persistence
+          - redisgraphMemoryLimit
+          - redisgraphMemoryRequest
           - storageClass
           - storageSize
           type: object
