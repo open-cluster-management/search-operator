@@ -1,3 +1,5 @@
+# Copyright (c) 2021 Red Hat, Inc.
+# Copyright Contributors to the Open Cluster Management project
 ## Append samples you want in your CSV to this file as resources ##
 resources:
 - search.open-cluster-management.io_v1alpha1_searchoperator.yaml
