@@ -1,3 +1,5 @@
+# Copyright (c) 2021 Red Hat, Inc.
+# Copyright Contributors to the Open Cluster Management project
 # Current Operator version
 VERSION ?= 0.0.1
 # Default bundle image tag
