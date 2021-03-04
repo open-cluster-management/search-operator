@@ -42,9 +42,6 @@ e2e-tests:
 	@echo "Run e2e-tests"
 	./cicd-scripts/run-e2e-tests.sh
 
-copyright-check:
-	./cicd-scripts/copyright-check.sh
-
 all: manager
 
 # Run tests
