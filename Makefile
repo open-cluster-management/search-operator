@@ -1,3 +1,5 @@
+# Copyright (c) 2021 Red Hat, Inc.
+# Copyright Contributors to the Open Cluster Management project
 # Current Operator version
 VERSION ?= 0.0.1
 # Default bundle image tag
@@ -39,9 +41,6 @@ unit-tests:
 e2e-tests:
 	@echo "Run e2e-tests"
 	./cicd-scripts/run-e2e-tests.sh
-
-copyright-check:
-	./cicd-scripts/copyright-check.sh
 
 all: manager
 
