@@ -1,3 +1,5 @@
+// Copyright (c) 2021 Red Hat, Inc.
+// Copyright Contributors to the Open Cluster Management project
 /*
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -33,7 +35,9 @@ type SearchOperatorSpec struct {
 
 	PullSecret string `json:"pullsecret,omitempty"`
 
-	SearchNodeSelector NodeSelector `json:"nodeselector,omitempty"`
+	// NodeSelector causes all components to be scheduled on nodes with matching labels.
+	// +optional
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 }
 
 // SearchOperatorStatus defines the observed state of SearchOperator
@@ -72,13 +76,6 @@ type PodResource struct {
 	LimitMemory string `json:"limit_memory"`
 	// Limit CPU
 	LimitCPU string `json:"limit_cpu,omitempty"`
-}
-
-type NodeSelector struct {
-	Enabled             bool   `json:"enabled"`
-	OS                  string `json:"os,omitempty"`
-	CustomLabelSelector string `json:"customlabelselector,omitempty"`
-	CustomLabelValue    string `json:"customlabelvalue,omitempty"`
 }
 
 type ImageOverrides struct {

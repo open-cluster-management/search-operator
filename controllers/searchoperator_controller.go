@@ -1,4 +1,5 @@
 // Copyright (c) 2020 Red Hat, Inc.
+// Copyright Contributors to the Open Cluster Management project
 
 package controllers
 
@@ -309,6 +310,11 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 				},
 				Spec: v1.PodSpec{
 					ServiceAccountName: "search-operator",
+					Tolerations: []v1.Toleration{{
+						Key:      "node-role.kubernetes.io/infra",
+						Effect:   v1.TaintEffectNoSchedule,
+						Operator: v1.TolerationOpExists,
+					}},
 					ImagePullSecrets: []v1.LocalObjectReference{{
 						Name: cr.Spec.PullSecret,
 					}},
@@ -445,7 +451,10 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 			}
 		}
 	}
-
+	if cr.Spec.NodeSelector != nil {
+		sset.Spec.Template.Spec.NodeSelector = cr.Spec.NodeSelector
+		log.Info("Added Node Selector")
+	}
 	if err := ctrl.SetControllerReference(cr, sset, r.Scheme); err != nil {
 		log.Info("Cannot set statefulSet OwnerReference", err.Error())
 	}

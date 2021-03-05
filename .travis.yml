@@ -1,3 +1,5 @@
+# Copyright (c) 2021 Red Hat, Inc.
+# Copyright Contributors to the Open Cluster Management project
 os:
   - linux
 
@@ -16,7 +18,7 @@ addons:
 
 branches:
   only:
-    - master
+    - main
     - /^release-[0-9]+\..*$/
 
 env:
@@ -50,7 +52,7 @@ jobs:
       script:
         - if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then export COMPONENT_TAG_EXTENSION="-PR${TRAVIS_PULL_REQUEST}-${TRAVIS_COMMIT}"; fi;
         - |
-          make copyright-check && make component/build && make component/push
+          make component/build && make component/push
     - stage: unit-test
       name: "Run unit tests"
       script:
@@ -69,7 +71,7 @@ jobs:
            make component/pull && make component/test/e2e
     - stage: release-ff
       name: "Push commits to current release branch"
-      if: type = push AND branch =~ /^master$/
+      if: type = push AND branch =~ /^main$/
       script:
         - make release-ff
     - stage: publish
