@@ -99,7 +99,7 @@ func Test_searchOperatorNotFound(t *testing.T) {
 	client := fake.NewFakeClientWithScheme(testSetup.scheme)
 	nilSearchOperator := SearchOperatorReconciler{client, log, testSetup.scheme}
 
-	_, err := nilSearchOperator.Reconcile(req)
+	_, err := nilSearchOperator.Reconcile(context.TODO(), req)
 	assert.Nil(t, err, "Expected Reconcile Error to be Nil. Got error: %v", err)
 
 	instance := &searchv1alpha1.SearchOperator{}
@@ -113,7 +113,7 @@ func Test_secretCreatedWithOwnerRef(t *testing.T) {
 	client := fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator)
 	nilSearchOperator := SearchOperatorReconciler{client, log, testSetup.scheme}
 
-	_, err := nilSearchOperator.Reconcile(testSetup.request)
+	_, err := nilSearchOperator.Reconcile(context.TODO(), testSetup.request)
 
 	found := &corev1.Secret{}
 	err = client.Get(context.TODO(), types.NamespacedName{Name: testSecret.Name, Namespace: testSecret.Namespace}, found)
@@ -139,7 +139,7 @@ func Test_secretAlreadyExists(t *testing.T) {
 	client := fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, testSecret)
 	nilSearchOperator := SearchOperatorReconciler{client, log, testSetup.scheme}
 
-	_, err := nilSearchOperator.Reconcile(testSetup.request)
+	_, err := nilSearchOperator.Reconcile(context.TODO(), testSetup.request)
 
 	found := &corev1.Secret{}
 	err = client.Get(context.TODO(), types.NamespacedName{Name: testSecret.Name, Namespace: testSecret.Namespace}, found)
@@ -157,7 +157,7 @@ func Test_EmptyDirStatefulsetCreatedWithOwnerRef(t *testing.T) {
 	nilSearchOperator := SearchOperatorReconciler{client, log, testSetup.scheme}
 	var err error
 
-	_, err = nilSearchOperator.Reconcile(testSetup.request)
+	_, err = nilSearchOperator.Reconcile(context.TODO(), testSetup.request)
 
 	foundStatefulset := &appv1.StatefulSet{}
 	err = client.Get(context.TODO(), types.NamespacedName{Name: testSetup.statefulsetWithOutPVC.Name, Namespace: testSetup.statefulsetWithOutPVC.Namespace}, foundStatefulset)
@@ -189,9 +189,9 @@ func Test_StatefulsetWithNoPersistenceStatus(t *testing.T) {
 	testSetup.customizationCR.Spec.Persistence = &persistence
 	err = client.Update(context.TODO(), testSetup.customizationCR)
 
-	_, err = nilSearchOperator.Reconcile(testSetup.request)
+	_, err = nilSearchOperator.Reconcile(context.TODO(), testSetup.request)
 	//Calling reconcile again to check if shorter path with 1 sec wait time is used the second time
-	_, err = nilSearchOperator.Reconcile(testSetup.request)
+	_, err = nilSearchOperator.Reconcile(context.TODO(), testSetup.request)
 	err = client.Get(context.TODO(), testSetup.request.NamespacedName, instance)
 
 	assert.Nil(t, err, "Expected searchoperator to be found with no error. Got error: %v", err)
@@ -212,9 +212,9 @@ func Test_StatefulsetWithPVC(t *testing.T) {
 	assert.Nil(t, err, "Expected search Operator to be created. Got error: %v", err)
 
 	//Persistence is enabled by default in search operator
-	_, err = nilSearchOperator.Reconcile(req)
+	_, err = nilSearchOperator.Reconcile(context.TODO(), req)
 	//Calling reconcile again to check if shorter path with 1 sec wait time is used the second time
-	_, err = nilSearchOperator.Reconcile(req)
+	_, err = nilSearchOperator.Reconcile(context.TODO(), req)
 	assert.Nil(t, err, "Expected search Operator reconcile to complete successfully. Got error: %v", err)
 
 	err = client.Get(context.TODO(), req.NamespacedName, instance)
@@ -252,7 +252,7 @@ func Test_FailSettingupWithPVC(t *testing.T) {
 	testSetup.customizationCR.Spec.Persistence = &persistence
 	err = client.Create(context.TODO(), testSetup.customizationCR)
 
-	_, err = nilSearchOperator.Reconcile(req)
+	_, err = nilSearchOperator.Reconcile(context.TODO(), req)
 	assert.NotNil(t, err, "Expected Reconcile error to be not nil. Got nil.")
 
 	err = client.Get(context.TODO(), req.NamespacedName, instance)
@@ -280,7 +280,7 @@ func Test_UnschedulablePodWithPersistence(t *testing.T) {
 	assert.Nil(t, err, "Expected search Operator to be created. Got error: %v", err)
 
 	//Persistence is enabled by default in operator - this should cause statefulset to fall back to empty dir since we don't have PVC
-	_, err = nilSearchOperator.Reconcile(req)
+	_, err = nilSearchOperator.Reconcile(context.TODO(), req)
 	assert.NotNil(t, err, "Expected Reconcile error to be not nil. Got nil.")
 	assert.Equal(t, "Redisgraph Pod not running", err.Error(), "Expected Redisgraph Pod not running error. Got %v", err)
 
@@ -310,7 +310,7 @@ func Test_UnschedulablePodWithOutPersistence(t *testing.T) {
 	persistence := false
 	testSetup.customizationCR.Spec.Persistence = &persistence
 	err = client.Update(context.TODO(), testSetup.customizationCR)
-	_, err = nilSearchOperator.Reconcile(req)
+	_, err = nilSearchOperator.Reconcile(context.TODO(), req)
 
 	assert.NotNil(t, err, "Expected Reconcile error to be not nil. Got nil.")
 	assert.Equal(t, "Redisgraph Pod not running", err.Error(), "Expected Redisgraph Pod not running error. Got %v", err)
@@ -336,7 +336,7 @@ func Test_UnschedulablePodWithDisAllowDegradedMode(t *testing.T) {
 	persistence := true
 	testSetup.customizationCR.Spec.Persistence = &persistence
 	err = client.Update(context.TODO(), testSetup.customizationCR)
-	_, err = nilSearchOperator.Reconcile(req)
+	_, err = nilSearchOperator.Reconcile(context.TODO(), req)
 
 	assert.NotNil(t, err, "Expected Reconcile error to be not nil. Got nil.")
 	assert.Equal(t, "Redisgraph Pod not running", err.Error(), "Expected Redisgraph Pod not running error. Got %v", err)

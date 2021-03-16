@@ -70,12 +70,12 @@ var (
 )
 var startingSpec searchv1alpha1.SearchCustomizationSpec
 
-func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+func (r *SearchOperatorReconciler) Reconcile(c context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	_ = r.Log.WithValues("searchoperator", req.NamespacedName)
 	// Fetch the SearchOperator instance
 	instance := &searchv1alpha1.SearchOperator{}
-	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: "searchoperator", Namespace: req.Namespace}, instance)
+	err := r.Client.Get(c, types.NamespacedName{Name: "searchoperator", Namespace: req.Namespace}, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -90,7 +90,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	// Fetch the SearchCustomization instance
 	custom := &searchv1alpha1.SearchCustomization{}
 	customValuesInuse := false
-	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: "searchcustomization", Namespace: req.Namespace}, custom)
+	err = r.Client.Get(c, types.NamespacedName{Name: "searchcustomization", Namespace: req.Namespace}, custom)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
@@ -244,39 +244,39 @@ func (r *SearchOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	watchNamespace := os.Getenv("WATCH_NAMESPACE")
 	pred := predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
-			return e.Meta.GetNamespace() == watchNamespace
+			return e.Object.GetNamespace() == watchNamespace
 		},
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			if e.MetaNew.GetNamespace() == watchNamespace &&
-				e.MetaNew.GetGeneration() != e.MetaOld.GetGeneration() {
+			if e.ObjectNew.GetNamespace() == watchNamespace &&
+				e.ObjectNew.GetGeneration() != e.ObjectOld.GetGeneration() {
 				return true
 			}
 			return false
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
-			if e.Meta.GetNamespace() == watchNamespace {
+			if e.Object.GetNamespace() == watchNamespace {
 				return !e.DeleteStateUnknown
 			}
 			return false
 		},
 	}
 
-	searchCustomizationFn := handler.ToRequestsFunc(
-		func(a handler.MapObject) []reconcile.Request {
+	searchCustomizationFn :=
+		func(c client.Object) []reconcile.Request {
 			return []reconcile.Request{
 				{NamespacedName: types.NamespacedName{
 					Name:      "searchcustomization",
 					Namespace: watchNamespace,
 				}},
 			}
-		})
+		}
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&searchv1alpha1.SearchOperator{}).
 		Owns(&appv1.StatefulSet{}).
 		Owns(&corev1.Secret{}).
 		Watches(&source.Kind{Type: &searchv1alpha1.SearchCustomization{}},
-			&handler.EnqueueRequestsFromMapFunc{ToRequests: searchCustomizationFn}).
+			handler.EnqueueRequestsFromMapFunc(searchCustomizationFn)).
 		WithEventFilter(pred).
 		Complete(r)
 }
