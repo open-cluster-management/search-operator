@@ -28,8 +28,11 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // SearchOperatorReconciler reconciles a SearchOperator object
@@ -258,11 +261,22 @@ func (r *SearchOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		},
 	}
 
+	searchCustomizationFn :=
+		func(c client.Object) []reconcile.Request {
+			return []reconcile.Request{
+				{NamespacedName: types.NamespacedName{
+					Name:      "searchcustomization",
+					Namespace: watchNamespace,
+				}},
+			}
+		}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&searchv1alpha1.SearchOperator{}).
 		Owns(&appv1.StatefulSet{}).
 		Owns(&corev1.Secret{}).
-		For(&searchv1alpha1.SearchCustomization{}).
+		Watches(&source.Kind{Type: &searchv1alpha1.SearchCustomization{}},
+			handler.EnqueueRequestsFromMapFunc(searchCustomizationFn)).
 		WithEventFilter(pred).
 		Complete(r)
 }
