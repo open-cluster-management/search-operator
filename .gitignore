@@ -82,4 +82,5 @@ build-harness/
 !vbh/.build-harness-vendorized
 !vbh/build-harness
 !vbh/build-harness-extensions
+testbin/
 cover.html
