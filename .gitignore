@@ -83,3 +83,4 @@ build-harness/
 !vbh/build-harness
 !vbh/build-harness-extensions
 testbin/
+cover.html

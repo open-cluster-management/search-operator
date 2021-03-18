@@ -2,7 +2,7 @@
 // Copyright Contributors to the Open Cluster Management project
 module github.com/open-cluster-management/search-operator
 
-go 1.13
+go 1.16
 
 require (
 	github.com/go-logr/logr v0.1.0
@@ -10,5 +10,5 @@ require (
 	k8s.io/api v0.18.6
 	k8s.io/apimachinery v0.18.6
 	k8s.io/client-go v0.18.6
-	sigs.k8s.io/controller-runtime v0.6.3
+	sigs.k8s.io/controller-runtime v0.6.5
 )
