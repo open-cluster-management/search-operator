@@ -28,4 +28,4 @@ https://v1-2-x.sdk.operatorframework.io/docs/installation/install-operator-sdk/
 Update the search-operator deployment yaml with this generated docker image to test your changes. You may have to use personal quay.io repository or build the docker image in travis. 
 
 To create new APIs follow the example command for SearchCustomization CRD.
-- operator-sdk create api --group search.open-cluster-management.io  --version v1alpha11 --kind SearchCustomization --resource=true --controller=true
+- operator-sdk create api --group search.open-cluster-management.io  --version v1alpha1 --kind SearchCustomization --resource=true --controller=true

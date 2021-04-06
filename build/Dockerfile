@@ -2,7 +2,9 @@
 # Copyright Contributors to the Open Cluster Management project
 FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
 
-RUN microdnf update
+RUN microdnf update &&\
+    microdnf install ca-certificates vi --nodocs &&\
+    microdnf clean all
 
 ENV OPERATOR=/usr/local/bin/search-operator \
     USER_UID=1001 \
