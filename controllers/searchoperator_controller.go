@@ -10,7 +10,6 @@ import (
 	"math/big"
 	"os"
 	"reflect"
-	"strconv"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -68,7 +67,6 @@ var (
 	storageClass         = ""
 	storageSize          = "10Gi"
 	namespace            = os.Getenv("WATCH_NAMESPACE")
-	setupPod, _          = strconv.ParseBool(os.Getenv("DOWNSTREAM"))
 )
 var startingSpec searchv1alpha1.SearchCustomizationSpec
 
@@ -148,84 +146,83 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 
 	// Setup RedisGraph Deployment
 	r.Log.Info(fmt.Sprintf("Config in  Use Persistence/AllowDegrade %t/%t", persistence, allowdegrade))
-	if setupPod {
-		if persistence {
-			//If running PVC deployment nothing to do
-			if persistenceStatus == statusUsingPVC && isStatefulSetAvailable(r.Client) && r.isPodRunning(true, 1) {
-				return ctrl.Result{}, nil
+	if persistence {
+		//If running PVC deployment nothing to do
+		if persistenceStatus == statusUsingPVC && isStatefulSetAvailable(r.Client) && r.isPodRunning(true, 1) {
+			return ctrl.Result{}, nil
+		}
+		//If running degraded deployment AND AllowDegradeMode is set
+		if allowdegrade && persistenceStatus == statusDegradedEmptyDir && isStatefulSetAvailable(r.Client) && r.isPodRunning(false, 1) {
+			return ctrl.Result{}, nil
+		}
+		pvcError := setupVolume(r.Client)
+		if pvcError != nil {
+			return ctrl.Result{}, pvcError
+		}
+		r.executeDeployment(r.Client, instance, true, persistence)
+		podReady := r.isPodRunning(true, waitSecondsForPodChk)
+		if podReady {
+			//Write Status
+			err := updateCRs(r.Client, instance, statusUsingPVC,
+				custom, persistence, storageClass, storageSize, customValuesInuse)
+			if err != nil {
+				return ctrl.Result{}, err
 			}
-			//If running degraded deployment AND AllowDegradeMode is set
-			if allowdegrade && persistenceStatus == statusDegradedEmptyDir && isStatefulSetAvailable(r.Client) && r.isPodRunning(false, 1) {
-				return ctrl.Result{}, nil
+		}
+		//If Pod cannot be scheduled rollback to EmptyDir if AllowDegradeMode is set
+		if !podReady && allowdegrade {
+			r.Log.Info("Degrading Redisgraph deployment to use empty dir.")
+			err := deleteRedisStatefulSet(r.Client)
+			if err != nil {
+				return ctrl.Result{}, err
 			}
-			pvcError := setupVolume(r.Client)
-			if pvcError != nil {
-				return ctrl.Result{}, pvcError
+			err = deletePVC(r.Client)
+			if err != nil {
+				return ctrl.Result{}, err
 			}
-			r.executeDeployment(r.Client, instance, true, persistence)
-			podReady := r.isPodRunning(true, waitSecondsForPodChk)
-			if podReady {
-				//Write Status
-				err := updateCRs(r.Client, instance, statusUsingPVC,
-					custom, persistence, storageClass, storageSize, customValuesInuse)
-				if err != nil {
-					return ctrl.Result{}, err
-				}
-			}
-			//If Pod cannot be scheduled rollback to EmptyDir if AllowDegradeMode is set
-			if !podReady && allowdegrade {
-				r.Log.Info("Degrading Redisgraph deployment to use empty dir.")
-				err := deleteRedisStatefulSet(r.Client)
-				if err != nil {
-					return ctrl.Result{}, err
-				}
-				err = deletePVC(r.Client)
-				if err != nil {
-					return ctrl.Result{}, err
-				}
-				r.executeDeployment(r.Client, instance, false, persistence)
-				if r.isPodRunning(false, waitSecondsForPodChk) {
-					//Write Status
-					err := updateCRs(r.Client, instance, statusDegradedEmptyDir,
-						custom, false, "", "", customValuesInuse)
-					if err != nil {
-						return ctrl.Result{}, err
-					} else {
-						return ctrl.Result{}, nil
-					}
-				} else {
-					r.Log.Info("Unable to create Redisgraph Deployment in Degraded Mode")
-					//Write Status, delete statefulset and requeue
-					r.reconcileOnError(instance, statusFailedDegraded, custom, false, "", "", customValuesInuse)
-					return ctrl.Result{RequeueAfter: 5 * time.Second}, fmt.Errorf(redisNotRunning)
-				}
-			}
-			if !podReady && !allowdegrade {
-				r.Log.Info("Unable to create Redisgraph Deployment using PVC ")
-				//Write Status, delete statefulset and requeue
-				r.reconcileOnError(instance, statusFailedUsingPVC, custom, false, "", "", customValuesInuse)
-				return ctrl.Result{RequeueAfter: 5 * time.Second}, fmt.Errorf(redisNotRunning)
-			}
-		} else {
-			if isStatefulSetAvailable(r.Client) && r.isPodRunning(false, 1) &&
-				persistenceStatus == statusNoPersistence {
-				return ctrl.Result{}, nil
-			}
-			r.Log.Info("Using Deployment with persistence disabled")
 			r.executeDeployment(r.Client, instance, false, persistence)
 			if r.isPodRunning(false, waitSecondsForPodChk) {
-				//Write Status, if error - requeue
-				err := updateCRs(r.Client, instance, statusNoPersistence, custom, false, "", "", customValuesInuse)
+				//Write Status
+				err := updateCRs(r.Client, instance, statusDegradedEmptyDir,
+					custom, false, "", "", customValuesInuse)
 				if err != nil {
 					return ctrl.Result{}, err
+				} else {
+					return ctrl.Result{}, nil
 				}
 			} else {
-				r.Log.Info("Unable to create Redisgraph Deployment with persistence disabled")
+				r.Log.Info("Unable to create Redisgraph Deployment in Degraded Mode")
 				//Write Status, delete statefulset and requeue
-				r.reconcileOnError(instance, statusFailedNoPersistence, custom, false, "", "", customValuesInuse)
+				r.reconcileOnError(instance, statusFailedDegraded, custom, false, "", "", customValuesInuse)
 				return ctrl.Result{RequeueAfter: 5 * time.Second}, fmt.Errorf(redisNotRunning)
 			}
 		}
+		if !podReady && !allowdegrade {
+			r.Log.Info("Unable to create Redisgraph Deployment using PVC ")
+			//Write Status, delete statefulset and requeue
+			r.reconcileOnError(instance, statusFailedUsingPVC, custom, false, "", "", customValuesInuse)
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, fmt.Errorf(redisNotRunning)
+		}
+	} else {
+		if isStatefulSetAvailable(r.Client) && r.isPodRunning(false, 1) &&
+			persistenceStatus == statusNoPersistence {
+			return ctrl.Result{}, nil
+		}
+		r.Log.Info("Using Deployment with persistence disabled")
+		r.executeDeployment(r.Client, instance, false, persistence)
+		if r.isPodRunning(false, waitSecondsForPodChk) {
+			//Write Status, if error - requeue
+			err := updateCRs(r.Client, instance, statusNoPersistence, custom, false, "", "", customValuesInuse)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+		} else {
+			r.Log.Info("Unable to create Redisgraph Deployment with persistence disabled")
+			//Write Status, delete statefulset and requeue
+			r.reconcileOnError(instance, statusFailedNoPersistence, custom, false, "", "", customValuesInuse)
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, fmt.Errorf(redisNotRunning)
+		}
+
 	}
 	return ctrl.Result{}, nil
 }
