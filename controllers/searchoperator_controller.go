@@ -68,7 +68,7 @@ var (
 	storageClass         = ""
 	storageSize          = "10Gi"
 	namespace            = os.Getenv("WATCH_NAMESPACE")
-	setupPod, _          = strconv.ParseBool(os.Getenv("UPSTREAM"))
+	setupPod, _          = strconv.ParseBool(os.Getenv("USE_EXISTING_REDISGRAPH"))
 )
 var startingSpec searchv1alpha1.SearchCustomizationSpec
 
@@ -149,7 +149,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	// Setup RedisGraph Deployment
 	r.Log.Info(fmt.Sprintf("Config in  Use Persistence/AllowDegrade %t/%t", persistence, allowdegrade))
 	if setupPod {
-		r.Log.Info("Not deploying redisgraph. Waiting for custom deployment of Redisgraph pod")
+		r.Log.Info("Not deploying redisgraph. Using custom/existing deployment of Redisgraph pod")
 		return ctrl.Result{}, nil
 	}
 	if persistence {
