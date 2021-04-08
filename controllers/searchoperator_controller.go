@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"os"
 	"reflect"
+	"strconv"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -67,6 +68,7 @@ var (
 	storageClass         = ""
 	storageSize          = "10Gi"
 	namespace            = os.Getenv("WATCH_NAMESPACE")
+	setupPod, _          = strconv.ParseBool(os.Getenv("UPSTREAM"))
 )
 var startingSpec searchv1alpha1.SearchCustomizationSpec
 
@@ -146,6 +148,10 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 
 	// Setup RedisGraph Deployment
 	r.Log.Info(fmt.Sprintf("Config in  Use Persistence/AllowDegrade %t/%t", persistence, allowdegrade))
+	if setupPod {
+		r.Log.Info("Not deploying redisgraph. Waiting for custom deployment of Redisgraph pod")
+		return ctrl.Result{}, nil
+	}
 	if persistence {
 		//If running PVC deployment nothing to do
 		if persistenceStatus == statusUsingPVC && isStatefulSetAvailable(r.Client) && r.isPodRunning(true, 1) {
