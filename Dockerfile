@@ -25,6 +25,7 @@ WORKDIR /
 COPY --from=builder /workspace/manager .
 ENV OPERATOR=/usr/local/bin/search-operator \
     USER_UID=1001 \
-    USER_NAME=search-operator
+    USER_NAME=search-operator \
+    DEPLOY_REDISGRAPH="false"
 
 ENTRYPOINT ["/manager"]
