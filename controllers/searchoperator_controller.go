@@ -68,7 +68,8 @@ var (
 	storageClass         = ""
 	storageSize          = "10Gi"
 	namespace            = os.Getenv("WATCH_NAMESPACE")
-	setupPod, _          = strconv.ParseBool(os.Getenv("DEPLOY_REDISGRAPH"))
+	deployRedisgraphPod  = os.Getenv("DEPLOY_REDISGRAPH")
+	deploy, deployVarErr = strconv.ParseBool(deployRedisgraphPod)
 )
 var startingSpec searchv1alpha1.SearchCustomizationSpec
 
@@ -148,8 +149,14 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 
 	// Setup RedisGraph Deployment
 	r.Log.Info(fmt.Sprintf("Config in  Use Persistence/AllowDegrade %t/%t", persistence, allowdegrade))
-	if !setupPod {
-		r.Log.Warn("Not deploying the database. This is not an error, it's a current limitation in this environment. The search feature is not operational.  More info: https://github.com/open-cluster-management/community/issues/34")
+	//if deploy env variable is false, don't deploy Redisgraph pod
+	if deployRedisgraphPod != "" && deployVarErr == nil && !deploy {
+		err := deleteRedisStatefulSet(r.Client) //if redisgraph pod is already deployed, delete it.
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		r.Log.Info(`Not deploying the database. This is not an error, it's a current limitation in this environment.
+	The search feature is not operational.  More info: https://github.com/open-cluster-management/community/issues/34`)
 		return ctrl.Result{}, nil
 	}
 	if persistence {
