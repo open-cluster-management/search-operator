@@ -149,7 +149,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	// Setup RedisGraph Deployment
 	r.Log.Info(fmt.Sprintf("Config in  Use Persistence/AllowDegrade %t/%t", persistence, allowdegrade))
 	if !setupPod {
-		r.Log.Info("Not deploying redisgraph. Using custom/existing deployment of Redisgraph pod")
+		r.Log.Warn("Not deploying the database. This is not an error, it's a current limitation in this environment. The search feature is not operational.  More info: https://github.com/open-cluster-management/community/issues/34")
 		return ctrl.Result{}, nil
 	}
 	if persistence {
