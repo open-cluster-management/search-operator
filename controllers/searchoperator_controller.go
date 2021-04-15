@@ -60,16 +60,16 @@ const (
 )
 
 var (
-	pvcName              = "search-redisgraph-pvc-0"
-	waitSecondsForPodChk = 180 //Wait for 3 minutes
-	log                  = logf.Log.WithName("searchoperator")
-	persistence          = true
-	allowdegrade         = true
-	storageClass         = ""
-	storageSize          = "10Gi"
-	namespace            = os.Getenv("WATCH_NAMESPACE")
-	deployRedisgraphPod  = os.Getenv("DEPLOY_REDISGRAPH")
-	deploy, deployVarErr = strconv.ParseBool(deployRedisgraphPod)
+	pvcName                               = "search-redisgraph-pvc-0"
+	waitSecondsForPodChk                  = 180 //Wait for 3 minutes
+	log                                   = logf.Log.WithName("searchoperator")
+	persistence                           = true
+	allowdegrade                          = true
+	storageClass                          = ""
+	storageSize                           = "10Gi"
+	namespace                             = os.Getenv("WATCH_NAMESPACE")
+	deployRedisgraphPod, deployVarPresent = os.LookupEnv("DEPLOY_REDISGRAPH")
+	deploy, deployVarErr                  = strconv.ParseBool(deployRedisgraphPod)
 )
 var startingSpec searchv1alpha1.SearchCustomizationSpec
 
@@ -150,7 +150,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	// Setup RedisGraph Deployment
 	r.Log.Info(fmt.Sprintf("Config in  Use Persistence/AllowDegrade %t/%t", persistence, allowdegrade))
 	//if deploy env variable is false, don't deploy Redisgraph pod
-	if deployRedisgraphPod != "" && deployVarErr == nil && !deploy {
+	if deployVarPresent && deployVarErr == nil && !deploy {
 		err := deleteRedisStatefulSet(r.Client) //if redisgraph pod is already deployed, delete it.
 		if err != nil {
 			return ctrl.Result{}, err
