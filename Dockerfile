@@ -23,7 +23,6 @@ FROM registry.access.redhat.com/ubi8/ubi-minimal:8.3
 
 RUN microdnf update &&\
     microdnf install ca-certificates vi --nodocs &&\
-    mkdir /licenses &&\
     microdnf clean all
 
 WORKDIR /
