@@ -60,14 +60,15 @@ const (
 )
 
 var (
-	pvcName                               = "search-redisgraph-pvc-0"
-	waitSecondsForPodChk                  = 180 //Wait for 3 minutes
-	log                                   = logf.Log.WithName("searchoperator")
-	persistence                           = true
-	allowdegrade                          = true
-	storageClass                          = ""
-	storageSize                           = "10Gi"
-	namespace                             = os.Getenv("WATCH_NAMESPACE")
+	pvcName              = "search-redisgraph-pvc-0"
+	waitSecondsForPodChk = 180 //Wait for 3 minutes
+	log                  = logf.Log.WithName("searchoperator")
+	persistence          = true
+	allowdegrade         = true
+	storageClass         = ""
+	storageSize          = "10Gi"
+	namespace            = os.Getenv("WATCH_NAMESPACE")
+	//Keeping these here as the pod will restart everytime when ENV is updated and we will read the updated values
 	deployRedisgraphPod, deployVarPresent = os.LookupEnv("DEPLOY_REDISGRAPH")
 	deploy, deployVarErr                  = strconv.ParseBool(deployRedisgraphPod)
 )
