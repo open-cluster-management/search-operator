@@ -412,10 +412,6 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 									SecretName: "search-redisgraph-secrets",
 									Items: []v1.KeyToPath{
 										{
-											Key:  "ca.crt",
-											Path: "redis.crt",
-										},
-										{
 											Key:  "tls.crt",
 											Path: "server.crt",
 										},
