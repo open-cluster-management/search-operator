@@ -26,6 +26,8 @@ COPY --from=builder /workspace/manager .
 ENV OPERATOR=/usr/local/bin/search-operator \
     USER_UID=1001 \
     USER_NAME=search-operator \
-    DEPLOY_REDISGRAPH="true"
+    DEPLOY_REDISGRAPH="true" 
+    # TODO: Default to false once other components are ready
+
 
 ENTRYPOINT ["/manager"]
