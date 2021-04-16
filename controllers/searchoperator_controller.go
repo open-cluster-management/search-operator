@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"os"
 	"reflect"
+	"strconv"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -67,6 +68,9 @@ var (
 	storageClass         = ""
 	storageSize          = "10Gi"
 	namespace            = os.Getenv("WATCH_NAMESPACE")
+	//Keeping these here as the pod will restart everytime when ENV is updated and we will read the updated values
+	deployRedisgraphPod, deployVarPresent = os.LookupEnv("DEPLOY_REDISGRAPH")
+	deploy, deployVarErr                  = strconv.ParseBool(deployRedisgraphPod)
 )
 var startingSpec searchv1alpha1.SearchCustomizationSpec
 
@@ -146,6 +150,16 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 
 	// Setup RedisGraph Deployment
 	r.Log.Info(fmt.Sprintf("Config in  Use Persistence/AllowDegrade %t/%t", persistence, allowdegrade))
+	//if deploy env variable is false, don't deploy Redisgraph pod
+	if deployVarPresent && deployVarErr == nil && !deploy {
+		err := deleteRedisStatefulSet(r.Client) //if redisgraph pod is already deployed, delete it.
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		r.Log.Info(`Not deploying the database. This is not an error, it's a current limitation in this environment.
+	The search feature is not operational.  More info: https://github.com/open-cluster-management/community/issues/34`)
+		return ctrl.Result{}, nil
+	}
 	if persistence {
 		//If running PVC deployment nothing to do
 		if persistenceStatus == statusUsingPVC && isStatefulSetAvailable(r.Client) && r.isPodRunning(true, 1) {

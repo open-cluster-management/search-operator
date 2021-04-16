@@ -132,6 +132,7 @@ echo "=====Initial setup for tests====="
     echo "=====Deploying search-operator====="
 	$sed_command "s~{{ OPERATOR_IMAGE }}~$IMAGE_NAME~g" ./test/operator-deployment.yaml
 	echo -n "Applying search operator deployment: " && kubectl apply -f ./test/operator-deployment.yaml
+	echo -n "Set DEPLOY_REDISGRAPH variable: " && kubectl set env deploy search-operator DEPLOY_REDISGRAPH="true"
 	# # change the image name back to OPERATOR_IMAGE in operator deployment for next run
 	sed -i '-e' "s~$IMAGE_NAME~{{ OPERATOR_IMAGE }}~g" ./test/operator-deployment.yaml
 }

@@ -5,6 +5,8 @@ package controllers
 
 import (
 	"context"
+	"os"
+	"strconv"
 	"testing"
 
 	searchv1alpha1 "github.com/open-cluster-management/search-operator/api/v1alpha1"
@@ -316,6 +318,39 @@ func Test_UnschedulablePodWithOutPersistence(t *testing.T) {
 	assert.Equal(t, "Redisgraph Pod not running", err.Error(), "Expected Redisgraph Pod not running error. Got %v", err)
 	err = client.Get(context.TODO(), req.NamespacedName, instance)
 	assert.Equal(t, statusFailedNoPersistence, instance.Status.PersistenceStatus, "Search Operator status updated with statusFailedNoPersistence as expected.")
+}
+
+func Test_DoNotDeployRedisPod(t *testing.T) {
+	testSetup := commonSetup()
+	//Set DEPLOY_REDISGRAPH env to false to stop redisgraph pod from being deployed
+	os.Setenv("DEPLOY_REDISGRAPH", "false")
+	deployRedisgraphPod, deployVarPresent = os.LookupEnv("DEPLOY_REDISGRAPH")
+	deploy, deployVarErr = strconv.ParseBool(deployRedisgraphPod)
+	req := testSetup.request
+	testStatefulset := testSetup.statefulsetWithPVC
+
+	client := fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, testSetup.secret, testSetup.pvc, testSetup.statefulsetWithPVC)
+
+	nilSearchOperator := SearchOperatorReconciler{client, log, testSetup.scheme}
+	var err error
+	instance := &searchv1alpha1.SearchOperator{}
+	err = client.Get(context.TODO(), req.NamespacedName, instance)
+	assert.Nil(t, err, "Expected search Operator to be created. Got error: %v", err)
+
+	_, err = nilSearchOperator.Reconcile(req)
+	assert.Nil(t, err, "Expected search Operator reconcile to complete successfully. Got error: %v", err)
+
+	err = client.Get(context.TODO(), req.NamespacedName, instance)
+	assert.Nil(t, err, "Expected search Operator to be created. Got error: %v", err)
+
+	foundStatefulset := &appv1.StatefulSet{}
+	err = client.Get(context.TODO(), types.NamespacedName{Name: testStatefulset.Name, Namespace: testStatefulset.Namespace}, foundStatefulset)
+	assert.True(t, errors.IsNotFound(err), "Expected error: redisgraph statefulset to be Not Found. Got %v", err.Error())
+	assert.Equal(t, "", instance.Status.PersistenceStatus, "Search Operator status not set as expected.")
+	//Resetting the variables
+	os.Unsetenv("DEPLOY_REDISGRAPH")
+	deployRedisgraphPod, deployVarPresent = os.LookupEnv("DEPLOY_REDISGRAPH")
+	deploy, deployVarErr = strconv.ParseBool(deployRedisgraphPod)
 }
 
 func Test_UnschedulablePodWithDisAllowDegradedMode(t *testing.T) {
