@@ -1,7 +1,7 @@
 # Copyright (c) 2021 Red Hat, Inc.
 # Copyright Contributors to the Open Cluster Management project
 # Build the manager binary
-FROM registry.ci.openshift.org/open-cluster-management/builder:go1.16-linux-amd64 AS builder
+FROM registry.ci.openshift.org/open-cluster-management/builder:go1.16-linux AS builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
@@ -20,6 +20,10 @@ COPY controllers/ controllers/
 RUN CGO_ENABLED=0 go build -a -o manager main.go
 
 FROM registry.access.redhat.com/ubi8/ubi-minimal:8.3
+
+RUN microdnf update &&\
+    microdnf install ca-certificates vi --nodocs &&\
+    microdnf clean all
 
 WORKDIR /
 COPY --from=builder /workspace/manager .
