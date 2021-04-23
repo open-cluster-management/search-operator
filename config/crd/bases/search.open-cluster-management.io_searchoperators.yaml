@@ -102,6 +102,8 @@ spec:
                 description: Reflects the current status of the RedisGraph pod using
                   a Persistence mode (PVC/EmptyDir/Degraded)
                 type: string
+              previousstate:
+                type: boolean
             required:
             - persistence
             type: object
