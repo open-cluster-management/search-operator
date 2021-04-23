@@ -501,13 +501,8 @@ func updateOperatorCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, 
 		return err
 	}
 	cr.Status.PersistenceStatus = status
-	if cr.Status.PreviousState == nil {
-		cr.Status.PreviousState = &deploy
-	} else if cr.Status.PreviousState != nil {
-		if *cr.Status.PreviousState == deploy {
-			updState := !deploy
-			cr.Status.PreviousState = &updState
-		}
+	if deployVarPresent && deployVarErr == nil {
+		cr.Status.DeployRedisgraph = &deploy
 	}
 	err = kclient.Status().Update(context.TODO(), cr)
 	if err != nil {
