@@ -158,6 +158,12 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		}
 		r.Log.Info(`Not deploying the database. This is not an error, it's a current limitation in this environment.
 	The search feature is not operational.  More info: https://github.com/open-cluster-management/community/issues/34`)
+		//Write Status
+		err = updateCRs(r.Client, instance, redisNotRunning,
+			custom, persistence, storageClass, storageSize, customValuesInuse)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, nil
 	}
 	if persistence {
@@ -495,12 +501,15 @@ func updateOperatorCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, 
 		return err
 	}
 	cr.Status.PersistenceStatus = status
+	if deployVarPresent && deployVarErr == nil {
+		cr.Status.DeployRedisgraph = &deploy
+	}
 	err = kclient.Status().Update(context.TODO(), cr)
 	if err != nil {
 		if apierrors.IsConflict(err) {
 			log.Info("Failed to update status Object has been modified")
 		}
-		log.Error(err, fmt.Sprintf("Failed to update %s/%s status ", cr.Namespace, cr.Name))
+		log.Info(fmt.Sprintf("Failed to update %s/%s status. Error: %s", cr.Namespace, cr.Name, err.Error()))
 		return err
 	} else {
 		log.Info(fmt.Sprintf("Updated CR status with persistence %s  ", cr.Status.PersistenceStatus))
@@ -524,7 +533,7 @@ func updateCustomizationCR(kclient client.Client, cr *searchv1alpha1.SearchCusto
 		if apierrors.IsConflict(err) {
 			log.Info("Failed to update status Object has been modified")
 		}
-		log.Error(err, fmt.Sprintf("Failed to update %s/%s status ", cr.Namespace, cr.Name))
+		log.Info(fmt.Sprintf("Failed to update %s/%s status. Error:  %s", cr.Namespace, cr.Name, err.Error()))
 		return err
 	} else {
 		log.Info(fmt.Sprintf("Updated CR status with custom persistence %t ", cr.Status.Persistence))

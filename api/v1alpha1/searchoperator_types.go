@@ -44,6 +44,8 @@ type SearchOperatorSpec struct {
 type SearchOperatorStatus struct {
 	// Reflects the current status of the RedisGraph pod using a Persistence mode (PVC/EmptyDir/Degraded)
 	PersistenceStatus string `json:"persistence"`
+	// Reflects if Redisgraph deploy ENV is set to true
+	DeployRedisgraph *bool `json:"deployredisgraph,omitempty"`
 }
 
 // +kubebuilder:object:root=true

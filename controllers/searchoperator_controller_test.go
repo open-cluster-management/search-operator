@@ -346,7 +346,7 @@ func Test_DoNotDeployRedisPod(t *testing.T) {
 	foundStatefulset := &appv1.StatefulSet{}
 	err = client.Get(context.TODO(), types.NamespacedName{Name: testStatefulset.Name, Namespace: testStatefulset.Namespace}, foundStatefulset)
 	assert.True(t, errors.IsNotFound(err), "Expected error: redisgraph statefulset to be Not Found. Got %v", err.Error())
-	assert.Equal(t, "", instance.Status.PersistenceStatus, "Search Operator status not set as expected.")
+	assert.Equal(t, redisNotRunning, instance.Status.PersistenceStatus, "Search Operator status not set as expected.")
 	//Resetting the variables
 	os.Unsetenv("DEPLOY_REDISGRAPH")
 	deployRedisgraphPod, deployVarPresent = os.LookupEnv("DEPLOY_REDISGRAPH")
