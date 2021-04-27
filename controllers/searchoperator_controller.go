@@ -171,17 +171,20 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	}
 	if persistence {
 		//If running PVC deployment nothing to do
-		if persistenceStatus == statusUsingPVC && deployStatus == deploy && isStatefulSetAvailable(r.Client) && r.isPodRunning(true, 1) {
+		if persistenceStatus == statusUsingPVC && deployStatus == deploy &&
+			isStatefulSetAvailable(r.Client) && r.isPodRunning(true, 1) {
 			return ctrl.Result{}, nil
 		}
 		//If running degraded deployment AND AllowDegradeMode is set
-		if allowdegrade && persistenceStatus == statusDegradedEmptyDir && deployStatus == deploy && isStatefulSetAvailable(r.Client) && r.isPodRunning(false, 1) {
+		if allowdegrade && persistenceStatus == statusDegradedEmptyDir &&
+			deployStatus == deploy && isStatefulSetAvailable(r.Client) && r.isPodRunning(false, 1) {
 			return ctrl.Result{}, nil
 		}
 		//Restart search-collector pod while setting up Redisgraph pod
 		if deployVarPresent && deployVarErr == nil && deploy {
 			srchOp, err := fetchSrchOperator(r.Client, instance)
-			//If Redisgraph was disabled, collector will be in a 10 minute timeout loop. Restart collector while deploying Redisgraph.
+			//If Redisgraph was disabled, collector will be in a 10 minute timeout loop.
+			//Restart collector while deploying Redisgraph.
 			if err == nil && srchOp.Status.DeployRedisgraph != nil && *srchOp.Status.DeployRedisgraph == false {
 				r.Log.Info("Restarting search-collector pod")
 				//restart collector
@@ -537,12 +540,14 @@ func updateCRs(kclient client.Client, operatorCR *searchv1alpha1.SearchOperator,
 	return nil
 }
 
-func fetchSrchOperator(kclient client.Client, cr *searchv1alpha1.SearchOperator) (*searchv1alpha1.SearchOperator, error) {
+func fetchSrchOperator(kclient client.Client, cr *searchv1alpha1.SearchOperator) (
+	*searchv1alpha1.SearchOperator, error) {
 	found := &searchv1alpha1.SearchOperator{}
 	err := kclient.Get(context.TODO(), types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace}, found)
 	return found, err
 }
-func fetchSrchCustomization(kclient client.Client, cr *searchv1alpha1.SearchCustomization) (*searchv1alpha1.SearchCustomization, error) {
+func fetchSrchCustomization(kclient client.Client, cr *searchv1alpha1.SearchCustomization) (
+	*searchv1alpha1.SearchCustomization, error) {
 	found := &searchv1alpha1.SearchCustomization{}
 	err := kclient.Get(context.TODO(), types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace}, found)
 	return found, err
