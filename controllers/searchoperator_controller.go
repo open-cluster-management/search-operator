@@ -73,6 +73,7 @@ var (
 	deploy, deployVarErr                  = strconv.ParseBool(deployRedisgraphPod)
 )
 var startingSpec searchv1alpha1.SearchCustomizationSpec
+var deployStatus bool
 
 func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
@@ -147,7 +148,9 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 
 	//Read the searchoperator status
 	persistenceStatus := instance.Status.PersistenceStatus
-
+	if instance.Status.DeployRedisgraph != nil {
+		deployStatus = *instance.Status.DeployRedisgraph
+	}
 	// Setup RedisGraph Deployment
 	r.Log.Info(fmt.Sprintf("Config in  Use Persistence/AllowDegrade %t/%t", persistence, allowdegrade))
 	//if deploy env variable is false, don't deploy Redisgraph pod
@@ -168,12 +171,25 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	}
 	if persistence {
 		//If running PVC deployment nothing to do
-		if persistenceStatus == statusUsingPVC && isStatefulSetAvailable(r.Client) && r.isPodRunning(true, 1) {
+		if persistenceStatus == statusUsingPVC && deployStatus == deploy &&
+			isStatefulSetAvailable(r.Client) && r.isPodRunning(true, 1) {
 			return ctrl.Result{}, nil
 		}
 		//If running degraded deployment AND AllowDegradeMode is set
-		if allowdegrade && persistenceStatus == statusDegradedEmptyDir && isStatefulSetAvailable(r.Client) && r.isPodRunning(false, 1) {
+		if allowdegrade && persistenceStatus == statusDegradedEmptyDir &&
+			deployStatus == deploy && isStatefulSetAvailable(r.Client) && r.isPodRunning(false, 1) {
 			return ctrl.Result{}, nil
+		}
+		//Restart search-collector pod while setting up Redisgraph pod
+		if deployVarPresent && deployVarErr == nil && deploy {
+			srchOp, err := fetchSrchOperator(r.Client, instance)
+			//If Redisgraph was disabled, collector will be in a 10 minute timeout loop.
+			//Restart collector while deploying Redisgraph.
+			if err == nil && srchOp.Status.DeployRedisgraph != nil && *srchOp.Status.DeployRedisgraph == false {
+				r.Log.Info("Restarting search-collector pod")
+				//restart collector
+				r.restartCollector()
+			}
 		}
 		pvcError := setupVolume(r.Client)
 		if pvcError != nil {
@@ -225,7 +241,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		}
 	} else {
 		if isStatefulSetAvailable(r.Client) && r.isPodRunning(false, 1) &&
-			persistenceStatus == statusNoPersistence {
+			persistenceStatus == statusNoPersistence && deployStatus == deploy {
 			return ctrl.Result{}, nil
 		}
 		r.Log.Info("Using Deployment with persistence disabled")
@@ -257,6 +273,37 @@ func (r *SearchOperatorReconciler) reconcileOnError(instance *searchv1alpha1.Sea
 	}
 	if err = deleteRedisStatefulSet(r.Client); err != nil {
 		r.Log.Info("Error deleting statefulset. ", "Error: ", err)
+	}
+}
+
+func (r *SearchOperatorReconciler) restartCollector() {
+	// Get all pods from all namespaces without the "component:search-collector" label.
+
+	podList := &corev1.PodList{}
+	opts := []client.ListOption{client.MatchingLabels{"app": "search-prod", "component": "search-collector"}}
+	err := r.Client.List(context.TODO(), podList, opts...)
+	if err != nil || len(podList.Items) == 0 {
+		if len(podList.Items) == 0 {
+			r.Log.Info(fmt.Sprintf("Failed to find search-collector pods .%d pods found", len(podList.Items)))
+		}
+		r.Log.Info("Error listing search-collector pod. ", err)
+		return
+	}
+
+	for _, item := range podList.Items {
+		collectorPod := &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      item.Name,
+				Namespace: item.Namespace,
+			},
+		}
+		err := r.Client.Delete(context.TODO(), collectorPod)
+		if err != nil && !errors.IsNotFound(err) {
+			r.Log.Error(err, "Failed to delete search collector pod", "name", item.Name, " in namespace ", item.Namespace)
+			//Not needed to act on the error as restarting is to offset the timeout - search will continue to function
+			return
+		}
+		r.Log.Info("Search collector pod deleted", "name", item.Name, "namespace", item.Namespace)
 	}
 }
 
@@ -493,9 +540,20 @@ func updateCRs(kclient client.Client, operatorCR *searchv1alpha1.SearchOperator,
 	return nil
 }
 
-func updateOperatorCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, status string) error {
+func fetchSrchOperator(kclient client.Client, cr *searchv1alpha1.SearchOperator) (
+	*searchv1alpha1.SearchOperator, error) {
 	found := &searchv1alpha1.SearchOperator{}
 	err := kclient.Get(context.TODO(), types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace}, found)
+	return found, err
+}
+func fetchSrchCustomization(kclient client.Client, cr *searchv1alpha1.SearchCustomization) (
+	*searchv1alpha1.SearchCustomization, error) {
+	found := &searchv1alpha1.SearchCustomization{}
+	err := kclient.Get(context.TODO(), types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace}, found)
+	return found, err
+}
+func updateOperatorCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, status string) error {
+	cr, err := fetchSrchOperator(kclient, cr)
 	if err != nil {
 		log.Error(err, fmt.Sprintf("Failed to get SearchOperator %s/%s ", cr.Namespace, cr.Name))
 		return err
@@ -519,8 +577,7 @@ func updateOperatorCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, 
 
 func updateCustomizationCR(kclient client.Client, cr *searchv1alpha1.SearchCustomization,
 	persistence bool, storageClass string, storageSize string) error {
-	found := &searchv1alpha1.SearchCustomization{}
-	err := kclient.Get(context.TODO(), types.NamespacedName{Name: cr.Name, Namespace: cr.Namespace}, found)
+	cr, err := fetchSrchCustomization(kclient, cr)
 	if err != nil {
 		log.Error(err, fmt.Sprintf("Failed to get SearchCustomization %s/%s ", cr.Namespace, cr.Name))
 		return err
