@@ -553,7 +553,7 @@ func fetchSrchCustomization(kclient client.Client, cr *searchv1alpha1.SearchCust
 	return found, err
 }
 func updateOperatorCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, status string) error {
-	_, err := fetchSrchOperator(kclient, cr)
+	cr, err := fetchSrchOperator(kclient, cr)
 	if err != nil {
 		log.Error(err, fmt.Sprintf("Failed to get SearchOperator %s/%s ", cr.Namespace, cr.Name))
 		return err
@@ -577,7 +577,7 @@ func updateOperatorCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, 
 
 func updateCustomizationCR(kclient client.Client, cr *searchv1alpha1.SearchCustomization,
 	persistence bool, storageClass string, storageSize string) error {
-	_, err := fetchSrchCustomization(kclient, cr)
+	cr, err := fetchSrchCustomization(kclient, cr)
 	if err != nil {
 		log.Error(err, fmt.Sprintf("Failed to get SearchCustomization %s/%s ", cr.Namespace, cr.Name))
 		return err
