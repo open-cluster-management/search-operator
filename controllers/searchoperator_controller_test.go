@@ -406,6 +406,29 @@ func TestGetPVC(t *testing.T) {
 	assert.Nil(t, pvc.Spec.StorageClassName, "Expected empty StorageClassName. Got: %s", pvc.Spec.StorageClassName)
 }
 
+func TestRestartCollector(t *testing.T) {
+	//create fake Collector Pod
+	labels := map[string]string{}
+	labels["app"] = "search-prod"
+	labels["component"] = "search-collector"
+	testSetup := commonSetup()
+	collectorPod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "search-collector-pod", Labels: labels}}
+
+	client := fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, collectorPod)
+	nilSearchOperator := SearchOperatorReconciler{client, log, testSetup.scheme}
+
+	nilSearchOperator.restartCollector()
+	req := reconcile.Request{
+		NamespacedName: types.NamespacedName{
+			Namespace: namespace,
+			Name:      "search-collector-pod",
+		},
+	}
+	collectorPod1 := &corev1.Pod{}
+	err := client.Get(context.TODO(), req.NamespacedName, collectorPod1)
+	assert.True(t, errors.IsNotFound(err), "Expected error: SearchCollector pod to be Not Found. Got %v", err.Error())
+}
+
 func createFakeNamedPVC(requestBytes string, namespace string, userAnnotations map[string]string) *corev1.PersistentVolumeClaim {
 	annotations := map[string]string{}
 	for k, v := range userAnnotations {
