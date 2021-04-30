@@ -417,7 +417,7 @@ func TestRestartCollector(t *testing.T) {
 	client := fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, collectorPod)
 	nilSearchOperator := SearchOperatorReconciler{client, log, testSetup.scheme}
 
-	nilSearchOperator.restartCollector()
+	nilSearchOperator.restartSearchComponents()
 	req := reconcile.Request{
 		NamespacedName: types.NamespacedName{
 			Namespace: namespace,
