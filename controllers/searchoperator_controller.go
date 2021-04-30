@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"time"
 
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/go-logr/logr"
@@ -275,29 +276,33 @@ func (r *SearchOperatorReconciler) reconcileOnError(instance *searchv1alpha1.Sea
 		r.Log.Info("Error deleting statefulset. ", "Error: ", err)
 	}
 }
+
 func getOptions(opts map[string]string) []client.ListOption {
-	var optsList *client.ListOptions
-	var listOption []client.ListOption
-	labels := client.MatchingLabels(opts)
-	labels.ApplyToList(optsList)
-	optsList.ApplyOptions(listOption)
-	return listOption
+	listOptions := []client.ListOption{}
+	listOption := client.ListOptions{
+		LabelSelector: labels.SelectorFromSet(opts),
+		Namespace:     namespace,
+		Limit:         2, //setting this to 2 as a safety net while deleting pods
+	}
+	listOptions = append(listOptions, &listOption)
+	return listOptions
 }
 
+// Restart search collector and api pods
 func (r *SearchOperatorReconciler) restartSearchComponents() {
 	allComponents := map[string]map[string]string{}
-	allComponents["collector"] = map[string]string{"app": "search-prod", "component": "search-collector"}
-	allComponents["api"] = map[string]string{"app": "search", "component": "search-api"}
-	podList := &corev1.PodList{}
+	allComponents["Search-collector"] = map[string]string{"app": "search-prod", "component": "search-collector"}
+	allComponents["Search-api"] = map[string]string{"app": "search", "component": "search-api"}
 
 	for compName, compLabels := range allComponents {
 		opts := getOptions(compLabels)
+		podList := &corev1.PodList{}
 		err := r.Client.List(context.TODO(), podList, opts...)
 		if err != nil || len(podList.Items) == 0 {
 			if len(podList.Items) == 0 {
-				r.Log.Info(fmt.Sprintf("Failed to find %s pods .%d pods found", compName, len(podList.Items)))
+				r.Log.Info(fmt.Sprintf("Failed to find %s pods. %d pods found", compName, len(podList.Items)))
 			}
-			r.Log.Info("Error listing ", compName, " pod. ", err)
+			r.Log.Info(fmt.Sprintf("Error listing pods for component: %s", compName), "Err:", err)
 			return
 		}
 
@@ -310,11 +315,12 @@ func (r *SearchOperatorReconciler) restartSearchComponents() {
 			}
 			err := r.Client.Delete(context.TODO(), collectorPod)
 			if err != nil && !errors.IsNotFound(err) {
-				r.Log.Error(err, "Failed to delete search collector pod", "name", item.Name, " in namespace ", item.Namespace)
+				r.Log.Info("Failed to delete pods for ", "component", compName)
+				r.Log.Info(err.Error())
 				//Not needed to act on the error as restarting is to offset the timeout - search will continue to function
 				return
 			}
-			r.Log.Info("Search collector pod deleted", "name", item.Name, "namespace", item.Namespace)
+			r.Log.Info(fmt.Sprintf("%s pod deleted. Namespace/Name: %s/%s", compName, item.Namespace, item.Name))
 		}
 	}
 }
