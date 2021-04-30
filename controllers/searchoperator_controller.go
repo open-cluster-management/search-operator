@@ -296,13 +296,13 @@ func (r *SearchOperatorReconciler) restartSearchComponents() {
 		}
 
 		for _, item := range podList.Items {
-			collectorPod := &v1.Pod{
+			compPod := &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      item.Name,
 					Namespace: item.Namespace,
 				},
 			}
-			err := r.Client.Delete(context.TODO(), collectorPod)
+			err := r.Client.Delete(context.TODO(), compPod)
 			if err != nil && !errors.IsNotFound(err) {
 				r.Log.Info("Failed to delete pods for ", "component", compName)
 				r.Log.Info(err.Error())
