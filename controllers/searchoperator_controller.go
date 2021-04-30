@@ -184,11 +184,11 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		if deployVarPresent && deployVarErr == nil && deploy {
 			srchOp, err := fetchSrchOperator(r.Client, instance)
 			//If Redisgraph was disabled, collector will be in a 10 minute timeout loop.
-			//Restart collector while deploying Redisgraph.
+			//Restart collector and api pods while deploying Redisgraph.
 			if err == nil && srchOp.Status.DeployRedisgraph != nil && *srchOp.Status.DeployRedisgraph == false {
 				r.Log.Info("Restarting search-collector pod")
-				//restart collector
-				r.restartCollector()
+				//restart collector and api pods
+				r.restartSearchComponents()
 			}
 		}
 		pvcError := setupVolume(r.Client)
@@ -275,35 +275,47 @@ func (r *SearchOperatorReconciler) reconcileOnError(instance *searchv1alpha1.Sea
 		r.Log.Info("Error deleting statefulset. ", "Error: ", err)
 	}
 }
+func getOptions(opts map[string]string) []client.ListOption {
+	var optsList *client.ListOptions
+	var listOption []client.ListOption
+	labels := client.MatchingLabels(opts)
+	labels.ApplyToList(optsList)
+	optsList.ApplyOptions(listOption)
+	return listOption
+}
 
-func (r *SearchOperatorReconciler) restartCollector() {
-	// Get all pods from all namespaces without the "component:search-collector" label.
-
+func (r *SearchOperatorReconciler) restartSearchComponents() {
+	allComponents := map[string]map[string]string{}
+	allComponents["collector"] = map[string]string{"app": "search-prod", "component": "search-collector"}
+	allComponents["api"] = map[string]string{"app": "search", "component": "search-api"}
 	podList := &corev1.PodList{}
-	opts := []client.ListOption{client.MatchingLabels{"app": "search-prod", "component": "search-collector"}}
-	err := r.Client.List(context.TODO(), podList, opts...)
-	if err != nil || len(podList.Items) == 0 {
-		if len(podList.Items) == 0 {
-			r.Log.Info(fmt.Sprintf("Failed to find search-collector pods .%d pods found", len(podList.Items)))
-		}
-		r.Log.Info("Error listing search-collector pod. ", err)
-		return
-	}
 
-	for _, item := range podList.Items {
-		collectorPod := &v1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      item.Name,
-				Namespace: item.Namespace,
-			},
-		}
-		err := r.Client.Delete(context.TODO(), collectorPod)
-		if err != nil && !errors.IsNotFound(err) {
-			r.Log.Error(err, "Failed to delete search collector pod", "name", item.Name, " in namespace ", item.Namespace)
-			//Not needed to act on the error as restarting is to offset the timeout - search will continue to function
+	for compName, compLabels := range allComponents {
+		opts := getOptions(compLabels)
+		err := r.Client.List(context.TODO(), podList, opts...)
+		if err != nil || len(podList.Items) == 0 {
+			if len(podList.Items) == 0 {
+				r.Log.Info(fmt.Sprintf("Failed to find %s pods .%d pods found", compName, len(podList.Items)))
+			}
+			r.Log.Info("Error listing ", compName, " pod. ", err)
 			return
 		}
-		r.Log.Info("Search collector pod deleted", "name", item.Name, "namespace", item.Namespace)
+
+		for _, item := range podList.Items {
+			collectorPod := &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      item.Name,
+					Namespace: item.Namespace,
+				},
+			}
+			err := r.Client.Delete(context.TODO(), collectorPod)
+			if err != nil && !errors.IsNotFound(err) {
+				r.Log.Error(err, "Failed to delete search collector pod", "name", item.Name, " in namespace ", item.Namespace)
+				//Not needed to act on the error as restarting is to offset the timeout - search will continue to function
+				return
+			}
+			r.Log.Info("Search collector pod deleted", "name", item.Name, "namespace", item.Namespace)
+		}
 	}
 }
 
