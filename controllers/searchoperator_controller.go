@@ -187,7 +187,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			//If Redisgraph was disabled, collector will be in a 10 minute timeout loop.
 			//Restart collector and api pods while deploying Redisgraph.
 			if err == nil && srchOp.Status.DeployRedisgraph != nil && *srchOp.Status.DeployRedisgraph == false {
-				r.Log.Info("Restarting search-collector pod")
+				r.Log.Info("Restarting search-collector and search-api pods")
 				//restart collector and api pods
 				r.restartSearchComponents()
 			}
