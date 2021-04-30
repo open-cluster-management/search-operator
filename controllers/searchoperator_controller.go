@@ -277,17 +277,6 @@ func (r *SearchOperatorReconciler) reconcileOnError(instance *searchv1alpha1.Sea
 	}
 }
 
-func getOptions(opts map[string]string) []client.ListOption {
-	listOptions := []client.ListOption{}
-	listOption := client.ListOptions{
-		LabelSelector: labels.SelectorFromSet(opts),
-		Namespace:     namespace,
-		Limit:         2, //setting this to 2 as a safety net while deleting pods
-	}
-	listOptions = append(listOptions, &listOption)
-	return listOptions
-}
-
 // Restart search collector and api pods
 func (r *SearchOperatorReconciler) restartSearchComponents() {
 	allComponents := map[string]map[string]string{}
@@ -895,4 +884,15 @@ func (r *SearchOperatorReconciler) setupSecret(client client.Client, cr *searchv
 		log.Info("Skip reconcile: Secret already exists", "Secret.Namespace", found.Namespace, "Secret.Name", found.Name)
 	}
 	return nil
+}
+
+func getOptions(opts map[string]string) []client.ListOption {
+	listOptions := []client.ListOption{}
+	listOption := client.ListOptions{
+		LabelSelector: labels.SelectorFromSet(opts),
+		Namespace:     namespace,
+		Limit:         2, //setting this to 2 as a safety net while deleting pods
+	}
+	listOptions = append(listOptions, &listOption)
+	return listOptions
 }
