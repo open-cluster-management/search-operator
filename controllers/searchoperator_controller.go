@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"time"
 
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/go-logr/logr"
@@ -184,11 +185,11 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		if deployVarPresent && deployVarErr == nil && deploy {
 			srchOp, err := fetchSrchOperator(r.Client, instance)
 			//If Redisgraph was disabled, collector will be in a 10 minute timeout loop.
-			//Restart collector while deploying Redisgraph.
+			//Restart collector and api pods while deploying Redisgraph.
 			if err == nil && srchOp.Status.DeployRedisgraph != nil && *srchOp.Status.DeployRedisgraph == false {
-				r.Log.Info("Restarting search-collector pod")
-				//restart collector
-				r.restartCollector()
+				r.Log.Info("Restarting search-collector and search-api pods")
+				//restart collector and api pods
+				r.restartSearchComponents()
 			}
 		}
 		pvcError := setupVolume(r.Client)
@@ -276,34 +277,40 @@ func (r *SearchOperatorReconciler) reconcileOnError(instance *searchv1alpha1.Sea
 	}
 }
 
-func (r *SearchOperatorReconciler) restartCollector() {
-	// Get all pods from all namespaces without the "component:search-collector" label.
+// Restart search collector and api pods
+func (r *SearchOperatorReconciler) restartSearchComponents() {
+	allComponents := map[string]map[string]string{}
+	allComponents["Search-collector"] = map[string]string{"app": "search-prod", "component": "search-collector"}
+	allComponents["Search-api"] = map[string]string{"app": "search", "component": "search-api"}
 
-	podList := &corev1.PodList{}
-	opts := []client.ListOption{client.MatchingLabels{"app": "search-prod", "component": "search-collector"}}
-	err := r.Client.List(context.TODO(), podList, opts...)
-	if err != nil || len(podList.Items) == 0 {
-		if len(podList.Items) == 0 {
-			r.Log.Info(fmt.Sprintf("Failed to find search-collector pods .%d pods found", len(podList.Items)))
-		}
-		r.Log.Info("Error listing search-collector pod. ", err)
-		return
-	}
-
-	for _, item := range podList.Items {
-		collectorPod := &v1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      item.Name,
-				Namespace: item.Namespace,
-			},
-		}
-		err := r.Client.Delete(context.TODO(), collectorPod)
-		if err != nil && !errors.IsNotFound(err) {
-			r.Log.Error(err, "Failed to delete search collector pod", "name", item.Name, " in namespace ", item.Namespace)
-			//Not needed to act on the error as restarting is to offset the timeout - search will continue to function
+	for compName, compLabels := range allComponents {
+		opts := getOptions(compLabels)
+		podList := &corev1.PodList{}
+		err := r.Client.List(context.TODO(), podList, opts...)
+		if err != nil || len(podList.Items) == 0 {
+			if len(podList.Items) == 0 {
+				r.Log.Info(fmt.Sprintf("Failed to find %s pods. %d pods found", compName, len(podList.Items)))
+			}
+			r.Log.Info(fmt.Sprintf("Error listing pods for component: %s", compName), "Err:", err)
 			return
 		}
-		r.Log.Info("Search collector pod deleted", "name", item.Name, "namespace", item.Namespace)
+
+		for _, item := range podList.Items {
+			compPod := &v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      item.Name,
+					Namespace: item.Namespace,
+				},
+			}
+			err := r.Client.Delete(context.TODO(), compPod)
+			if err != nil && !errors.IsNotFound(err) {
+				r.Log.Info("Failed to delete pods for ", "component", compName)
+				r.Log.Info(err.Error())
+				//Not needed to act on the error as restarting is to offset the timeout - search will continue to function
+				return
+			}
+			r.Log.Info(fmt.Sprintf("%s pod deleted. Namespace/Name: %s/%s", compName, item.Namespace, item.Name))
+		}
 	}
 }
 
@@ -877,4 +884,15 @@ func (r *SearchOperatorReconciler) setupSecret(client client.Client, cr *searchv
 		log.Info("Skip reconcile: Secret already exists", "Secret.Namespace", found.Namespace, "Secret.Name", found.Name)
 	}
 	return nil
+}
+
+func getOptions(opts map[string]string) []client.ListOption {
+	listOptions := []client.ListOption{}
+	listOption := client.ListOptions{
+		LabelSelector: labels.SelectorFromSet(opts),
+		Namespace:     namespace,
+		Limit:         2, //setting this to 2 as a safety net while deleting pods
+	}
+	listOptions = append(listOptions, &listOption)
+	return listOptions
 }
