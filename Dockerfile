@@ -32,5 +32,5 @@ ENV OPERATOR=/usr/local/bin/search-operator \
     USER_NAME=search-operator \
     DEPLOY_REDISGRAPH="false" 
 
-
+USER ${USER_UID}
 ENTRYPOINT ["/manager"]
