@@ -25,4 +25,5 @@ ENV OPERATOR=/usr/local/bin/search-operator \
     USER_UID=1001 \
     USER_NAME=search-operator
 
+USER ${USER_UID}
 ENTRYPOINT ["/manager"]
