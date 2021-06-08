@@ -297,7 +297,7 @@ func (r *SearchOperatorReconciler) restartSearchComponents() {
 				r.Log.Info(fmt.Sprintf("Failed to find %s pods. %d pods found", compName, len(podList.Items)))
 			}
 			r.Log.Info(fmt.Sprintf("Error listing pods for component: %s", compName), "Err:", err)
-			return
+			continue
 		}
 
 		for _, item := range podList.Items {
@@ -312,7 +312,7 @@ func (r *SearchOperatorReconciler) restartSearchComponents() {
 				r.Log.Info("Failed to delete pods for ", "component", compName)
 				r.Log.Info(err.Error())
 				//Not needed to act on the error as restarting is to offset the timeout - search will continue to function
-				return
+				continue
 			}
 			r.Log.Info(fmt.Sprintf("%s pod deleted. Namespace/Name: %s/%s", compName, item.Namespace, item.Name))
 		}
