@@ -370,8 +370,6 @@ func (r *SearchOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 					}},
 				}
 			}
-			fmt.Println("Updated secret not search. Name: ", a.Meta.GetName())
-
 			return []reconcile.Request{}
 		})
 	return ctrl.NewControllerManagedBy(mgr).
