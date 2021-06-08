@@ -79,7 +79,8 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	_ = context.Background()
 	_ = r.Log.WithValues("searchoperator", req.NamespacedName)
 	if strings.Contains(req.Name, "/certRefresh") {
-		fmt.Println("Certificate refreshed - Going to restart search pods")
+		r.Log.Info("Certificate refreshed - Going to restart search pods", "Certificate Name: ",
+			strings.TrimSuffix(req.Name, "/certRefresh"))
 		r.restartSearchComponents()
 		return ctrl.Result{}, nil
 	}
@@ -287,6 +288,7 @@ func (r *SearchOperatorReconciler) restartSearchComponents() {
 	allComponents["Search-redisgraph"] = map[string]string{"app": "search", "component": "redisgraph"}
 	allComponents["Search-collector"] = map[string]string{"app": "search-prod", "component": "search-collector"}
 	allComponents["Search-api"] = map[string]string{"app": "search", "component": "search-api"}
+	allComponents["Search-aggregator"] = map[string]string{"app": "search", "component": "search-aggregator"}
 
 	for compName, compLabels := range allComponents {
 		opts := getOptions(compLabels)
@@ -355,14 +357,17 @@ func (r *SearchOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if ok {
 		apiSecretName = strings.Trim(releaseName, " ") + "-search-api-secrets"
 	}
-	aggregatorSecret := corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "search-aggregator-secrets", Namespace: watchNamespace}}
-	redisgraphSecret := corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "search-redisgraph-secrets", Namespace: watchNamespace}}
+	aggregatorSecret := corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "search-aggregator-secrets",
+		Namespace: watchNamespace}}
+	redisgraphSecret := corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "search-redisgraph-secrets",
+		Namespace: watchNamespace}}
 	apiSecret := corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: apiSecretName, Namespace: watchNamespace}}
 	// searchSecrets := []corev1.Secret{aggregatorSecret, redisgraphSecret, apiSecret}
 	secretWatchFn := handler.ToRequestsFunc(
 		func(a handler.MapObject) []reconcile.Request {
-			if a.Meta.GetName() == aggregatorSecret.Name || a.Meta.GetName() == redisgraphSecret.Name || a.Meta.GetName() == apiSecret.Name {
-				fmt.Println("One of the search secrets updated. Starting reconcile. Name: ", a.Meta.GetName())
+			if a.Meta.GetName() == aggregatorSecret.Name || a.Meta.GetName() == redisgraphSecret.Name ||
+				a.Meta.GetName() == apiSecret.Name {
+				r.Log.Info("Search secret updated. Starting reconcile. ", " Name:", a.Meta.GetName())
 				return []reconcile.Request{
 					{NamespacedName: types.NamespacedName{
 						Name:      a.Meta.GetName() + "/certRefresh",

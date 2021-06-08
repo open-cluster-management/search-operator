@@ -429,6 +429,31 @@ func TestRestartCollector(t *testing.T) {
 	assert.True(t, errors.IsNotFound(err), "Expected error: SearchCollector pod to be Not Found. Got %v", err.Error())
 }
 
+func TestCertRefresh(t *testing.T) {
+	//create fake Collector Pod
+	labels := map[string]string{}
+	labels["app"] = "search-prod"
+	labels["component"] = "search-collector"
+	testSetup := commonSetup()
+	collectorPod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: "search-collector-pod", Labels: labels}}
+
+	client := fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, collectorPod)
+	nilSearchOperator := SearchOperatorReconciler{client, log, testSetup.scheme}
+
+	req := reconcile.Request{
+		NamespacedName: types.NamespacedName{
+			Namespace: namespace,
+			Name:      "search-redisgraph-secrets/certRefresh",
+		},
+	}
+	nilSearchOperator.Reconcile(req)
+	// When cert is refreshed search components should get restarted.
+	// Therefore search collector should not be found after reconcile.
+	collectorPod1 := &corev1.Pod{}
+	err := client.Get(context.TODO(), req.NamespacedName, collectorPod1)
+	assert.True(t, errors.IsNotFound(err), "Expected error: SearchCollector pod to be Not Found. Got %v", err.Error())
+}
+
 func createFakeNamedPVC(requestBytes string, namespace string, userAnnotations map[string]string) *corev1.PersistentVolumeClaim {
 	annotations := map[string]string{}
 	for k, v := range userAnnotations {
