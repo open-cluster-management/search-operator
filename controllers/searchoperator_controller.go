@@ -69,6 +69,7 @@ var (
 	storageClass         = ""
 	storageSize          = "10Gi"
 	namespace            = os.Getenv("WATCH_NAMESPACE")
+	releaseName          = os.Getenv("RELEASE_NAME")
 	//Keeping these here as the pod will restart everytime when ENV is updated and we will read the updated values
 	deployRedisgraphPod, deployVarPresent = os.LookupEnv("DEPLOY_REDISGRAPH")
 	deploy, deployVarErr                  = strconv.ParseBool(deployRedisgraphPod)
@@ -362,10 +363,15 @@ func int64Ptr(i int64) *int64 { return &i }
 func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOperator,
 	rdbVolumeSource v1.VolumeSource, saverdb string) *appv1.StatefulSet {
 	bool := false
+	metadataLabels := map[string]string{}
+	metadataLabels["release"] = releaseName
+	metadataLabels["component"] = component
+	metadataLabels["app"] = appName
 	sset := &appv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      statefulSetName,
 			Namespace: cr.Namespace,
+			Labels:    metadataLabels,
 		},
 		Spec: appv1.StatefulSetSpec{
 			Replicas: int32Ptr(1),
