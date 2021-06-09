@@ -41,6 +41,7 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
+
 	utilruntime.Must(searchopenclustermanagementiov1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
