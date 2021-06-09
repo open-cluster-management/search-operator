@@ -278,7 +278,6 @@ func (r *SearchOperatorReconciler) reconcileOnError(instance *searchv1alpha1.Sea
 // Restart search collector and api pods
 func (r *SearchOperatorReconciler) restartSearchComponents() {
 	allComponents := map[string]map[string]string{}
-	allComponents["Search-redisgraph"] = map[string]string{"app": "search", "component": "redisgraph"}
 	allComponents["Search-collector"] = map[string]string{"app": "search-prod", "component": "search-collector"}
 	allComponents["Search-api"] = map[string]string{"app": "search", "component": "search-api"}
 
