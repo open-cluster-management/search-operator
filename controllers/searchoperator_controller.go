@@ -20,9 +20,7 @@ import (
 	searchv1alpha1 "github.com/open-cluster-management/search-operator/api/v1alpha1"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -292,11 +290,11 @@ func (r *SearchOperatorReconciler) restartSearchComponents() {
 				r.Log.Info(fmt.Sprintf("Failed to find %s pods. %d pods found", compName, len(podList.Items)))
 			}
 			r.Log.Info(fmt.Sprintf("Error listing pods for component: %s", compName), "Err:", err)
-			return
+			continue
 		}
 
 		for _, item := range podList.Items {
-			compPod := &v1.Pod{
+			compPod := &corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      item.Name,
 					Namespace: item.Namespace,
@@ -307,7 +305,7 @@ func (r *SearchOperatorReconciler) restartSearchComponents() {
 				r.Log.Info("Failed to delete pods for ", "component", compName)
 				r.Log.Info(err.Error())
 				//Not needed to act on the error as restarting is to offset the timeout - search will continue to function
-				return
+				continue
 			}
 			r.Log.Info(fmt.Sprintf("%s pod deleted. Namespace/Name: %s/%s", compName, item.Namespace, item.Name))
 		}
@@ -360,7 +358,7 @@ func int32Ptr(i int32) *int32 { return &i }
 func int64Ptr(i int64) *int64 { return &i }
 
 func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOperator,
-	rdbVolumeSource v1.VolumeSource, saverdb string) *appv1.StatefulSet {
+	rdbVolumeSource corev1.VolumeSource, saverdb string) *appv1.StatefulSet {
 	bool := false
 	sset := &appv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -375,37 +373,37 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 					"app":       appName,
 				},
 			},
-			Template: v1.PodTemplateSpec{
+			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
 						"component": component,
 						"app":       appName,
 					},
 				},
-				Spec: v1.PodSpec{
+				Spec: corev1.PodSpec{
 					ServiceAccountName: "search-operator",
-					Tolerations: []v1.Toleration{{
+					Tolerations: []corev1.Toleration{{
 						Key:      "node-role.kubernetes.io/infra",
-						Effect:   v1.TaintEffectNoSchedule,
-						Operator: v1.TolerationOpExists,
+						Effect:   corev1.TaintEffectNoSchedule,
+						Operator: corev1.TolerationOpExists,
 					}},
-					ImagePullSecrets: []v1.LocalObjectReference{{
+					ImagePullSecrets: []corev1.LocalObjectReference{{
 						Name: cr.Spec.PullSecret,
 					}},
-					SecurityContext: &v1.PodSecurityContext{
+					SecurityContext: &corev1.PodSecurityContext{
 						FSGroup:   int64Ptr(redisUser),
 						RunAsUser: int64Ptr(redisUser),
 					},
-					Containers: []v1.Container{
+					Containers: []corev1.Container{
 						{
 							Name:  "redisgraph",
 							Image: cr.Spec.SearchImageOverrides.Redisgraph_TLS,
-							Env: []v1.EnvVar{
+							Env: []corev1.EnvVar{
 								{
 									Name: "REDIS_PASSWORD",
-									ValueFrom: &v1.EnvVarSource{
-										SecretKeyRef: &v1.SecretKeySelector{
-											LocalObjectReference: v1.LocalObjectReference{
+									ValueFrom: &corev1.EnvVarSource{
+										SecretKeyRef: &corev1.SecretKeySelector{
+											LocalObjectReference: corev1.LocalObjectReference{
 												Name: "redisgraph-user-secret",
 											},
 											Key: "redispwd",
@@ -421,46 +419,46 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 									Value: saverdb,
 								},
 							},
-							LivenessProbe: &v1.Probe{
+							LivenessProbe: &corev1.Probe{
 								InitialDelaySeconds: 10,
 								TimeoutSeconds:      1,
 								PeriodSeconds:       15,
 								SuccessThreshold:    1,
 								FailureThreshold:    3,
-								Handler: v1.Handler{
-									TCPSocket: &v1.TCPSocketAction{
+								Handler: corev1.Handler{
+									TCPSocket: &corev1.TCPSocketAction{
 										Port: intstr.FromInt(6380),
 									},
 								},
 							},
-							ReadinessProbe: &v1.Probe{
+							ReadinessProbe: &corev1.Probe{
 								InitialDelaySeconds: 5,
 								TimeoutSeconds:      1,
 								PeriodSeconds:       15,
 								SuccessThreshold:    1,
 								FailureThreshold:    3,
-								Handler: v1.Handler{
-									TCPSocket: &v1.TCPSocketAction{
+								Handler: corev1.Handler{
+									TCPSocket: &corev1.TCPSocketAction{
 										Port: intstr.FromInt(6380),
 									},
 								},
 							},
-							Resources: v1.ResourceRequirements{
-								Limits: v1.ResourceList{
+							Resources: corev1.ResourceRequirements{
+								Limits: corev1.ResourceList{
 									"memory": resource.MustParse(cr.Spec.Redisgraph_Resource.LimitMemory),
 								},
-								Requests: v1.ResourceList{
+								Requests: corev1.ResourceList{
 									"cpu":    resource.MustParse(cr.Spec.Redisgraph_Resource.RequestCPU),
 									"memory": resource.MustParse(cr.Spec.Redisgraph_Resource.RequestMemory),
 								},
 							},
 							TerminationMessagePolicy: "File",
 							TerminationMessagePath:   "/dev/termination-log",
-							SecurityContext: &v1.SecurityContext{
+							SecurityContext: &corev1.SecurityContext{
 								Privileged:               &bool,
 								AllowPrivilegeEscalation: &bool,
 							},
-							VolumeMounts: []v1.VolumeMount{
+							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "redis-graph-certs",
 									MountPath: "/certs",
@@ -472,19 +470,19 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 							},
 						},
 					},
-					Volumes: []v1.Volume{
+					Volumes: []corev1.Volume{
 						{
 							Name: "stunnel-pid",
-							VolumeSource: v1.VolumeSource{
-								EmptyDir: &v1.EmptyDirVolumeSource{},
+							VolumeSource: corev1.VolumeSource{
+								EmptyDir: &corev1.EmptyDirVolumeSource{},
 							},
 						},
 						{
 							Name: "redis-graph-certs",
-							VolumeSource: v1.VolumeSource{
-								Secret: &v1.SecretVolumeSource{
+							VolumeSource: corev1.VolumeSource{
+								Secret: &corev1.SecretVolumeSource{
 									SecretName: "search-redisgraph-secrets",
-									Items: []v1.KeyToPath{
+									Items: []corev1.KeyToPath{
 										{
 											Key:  "tls.crt",
 											Path: "server.crt",
@@ -503,13 +501,13 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 		},
 	}
 
-	if (v1.VolumeSource{}) != rdbVolumeSource {
-		rdbVolume := v1.Volume{
+	if (corev1.VolumeSource{}) != rdbVolumeSource {
+		rdbVolume := corev1.Volume{
 			Name:         "persist",
 			VolumeSource: rdbVolumeSource,
 		}
 		sset.Spec.Template.Spec.Volumes = append(sset.Spec.Template.Spec.Volumes, rdbVolume)
-		rdbVolumeMount := v1.VolumeMount{
+		rdbVolumeMount := corev1.VolumeMount{
 			Name:      "persist",
 			MountPath: "/redis-data",
 		}
@@ -571,7 +569,7 @@ func updateOperatorCR(kclient client.Client, cr *searchv1alpha1.SearchOperator, 
 	}
 	err = kclient.Status().Update(context.TODO(), cr)
 	if err != nil {
-		if apierrors.IsConflict(err) {
+		if errors.IsConflict(err) {
 			log.Info("Failed to update status Object has been modified")
 		}
 		log.Info(fmt.Sprintf("Failed to update %s/%s status. Error: %s", cr.Namespace, cr.Name, err.Error()))
@@ -594,7 +592,7 @@ func updateCustomizationCR(kclient client.Client, cr *searchv1alpha1.SearchCusto
 	cr.Status.StorageSize = storageSize
 	err = kclient.Status().Update(context.TODO(), cr)
 	if err != nil {
-		if apierrors.IsConflict(err) {
+		if errors.IsConflict(err) {
 			log.Info("Failed to update status Object has been modified")
 		}
 		log.Info(fmt.Sprintf("Failed to update %s/%s status. Error:  %s", cr.Namespace, cr.Name, err.Error()))
@@ -652,7 +650,7 @@ func deleteRedisStatefulSet(client client.Client) error {
 }
 
 func deletePVC(client client.Client) error {
-	pvc := &v1.PersistentVolumeClaim{
+	pvc := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pvcName,
 			Namespace: namespace,
@@ -668,34 +666,34 @@ func deletePVC(client client.Client) error {
 	return nil
 }
 
-func getPVC() *v1.PersistentVolumeClaim {
+func getPVC() *corev1.PersistentVolumeClaim {
 	if storageClass != "" {
-		return &v1.PersistentVolumeClaim{
+		return &corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      pvcName,
 				Namespace: namespace,
 			},
-			Spec: v1.PersistentVolumeClaimSpec{
-				AccessModes: []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
-				Resources: v1.ResourceRequirements{
-					Requests: v1.ResourceList{
-						v1.ResourceName(v1.ResourceStorage): resource.MustParse(storageSize),
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceName(corev1.ResourceStorage): resource.MustParse(storageSize),
 					},
 				},
 				StorageClassName: &storageClass,
 			},
 		}
 	}
-	return &v1.PersistentVolumeClaim{
+	return &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      pvcName,
 			Namespace: namespace,
 		},
-		Spec: v1.PersistentVolumeClaimSpec{
-			AccessModes: []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce},
-			Resources: v1.ResourceRequirements{
-				Requests: v1.ResourceList{
-					v1.ResourceName(v1.ResourceStorage): resource.MustParse(storageSize),
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceName(corev1.ResourceStorage): resource.MustParse(storageSize),
 				},
 			},
 		},
@@ -704,7 +702,7 @@ func getPVC() *v1.PersistentVolumeClaim {
 
 //Remove PVC if you have one
 func setupVolume(client client.Client) error {
-	found := &v1.PersistentVolumeClaim{}
+	found := &corev1.PersistentVolumeClaim{}
 	pvc := getPVC()
 	err := client.Get(context.TODO(), types.NamespacedName{Name: pvcName, Namespace: namespace}, found)
 	logKeyPVCName := "PVC Name"
@@ -807,7 +805,7 @@ func (r *SearchOperatorReconciler) isPodRunning(withPVC bool, waitSeconds int) b
 	return false
 }
 
-func isReady(pod v1.Pod, withPVC bool) bool {
+func isReady(pod corev1.Pod, withPVC bool) bool {
 	for _, status := range pod.Status.Conditions {
 		if status.Reason == "Unschedulable" {
 			log.Info("RedisGraph Pod UnScheduleable - likely PVC mount problem")
@@ -842,11 +840,11 @@ func isReady(pod v1.Pod, withPVC bool) bool {
 func (r *SearchOperatorReconciler) executeDeployment(client client.Client,
 	cr *searchv1alpha1.SearchOperator, usePVC bool, saverdb bool) *appv1.StatefulSet {
 	var statefulSet *appv1.StatefulSet
-	emptyDirVolume := v1.VolumeSource{
-		EmptyDir: &v1.EmptyDirVolumeSource{},
+	emptyDirVolume := corev1.VolumeSource{
+		EmptyDir: &corev1.EmptyDirVolumeSource{},
 	}
-	pvcVolume := v1.VolumeSource{
-		PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
+	pvcVolume := corev1.VolumeSource{
+		PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 			ClaimName: pvcName,
 		},
 	}
@@ -857,7 +855,7 @@ func (r *SearchOperatorReconciler) executeDeployment(client client.Client,
 			statefulSet = r.getStatefulSet(cr, pvcVolume, "true")
 		}
 	} else {
-		statefulSet = r.getStatefulSet(cr, v1.VolumeSource{}, "false")
+		statefulSet = r.getStatefulSet(cr, corev1.VolumeSource{}, "false")
 	}
 	updateRedisStatefulSet(client, statefulSet)
 	return statefulSet
