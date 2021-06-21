@@ -316,7 +316,7 @@ test_update_podresource_search_operator() {
 test_fallback_emptydir() {
 	echo "=====Delete searchcustomization and test fallbackto EmptyDir====="
 	echo -n "Delete searchcustomization: " && kubectl delete searchcustomization searchcustomization 
-	echo -n "Patch searchoperator: " && kubectl patch sc standard -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}' --type='merge'
+	echo -n "Patch storageclass: " && kubectl patch sc standard -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}' --type='merge'
 	echo -n "Scale statefulset : " && kubectl scale statefulset search-redisgraph --replicas=0
 	echo -n "Delete pvc : " && kubectl delete pvc search-redisgraph-pvc-0
 	echo -n "Delete statefulset : " && kubectl delete statefulset search-redisgraph
@@ -327,6 +327,31 @@ test_fallback_emptydir() {
 	  echo $SEARCHOPERATOR
 	  count=`expr $count + 1`
 	  if [[ "$SEARCHOPERATOR" == "\"Degraded mode using EmptyDir. Unable to use PersistenceVolumeClaim\"" ]]
+	  then
+	     echo "SUCCESS - Redisgraph Pod Ready"
+		 break
+	  fi
+	  echo "No Success yet ..Sleeping for 1s"
+	  sleep 1s
+	  if [ $count -gt 60 ]
+	  then
+	     echo "FAILED - Setting up Redisgraph Pod"
+		 exit 1
+	  fi
+	done 
+}
+
+test_saverdb_false() {
+	echo "=====Disable saving RDB with SAVERDB false====="
+	echo -n "Patch storageclass: " && kubectl patch sc standard -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}' --type='merge'
+	echo -n "Turn off SAVERDB " && kubectl set env statefulset search-redisgraph SAVERDB="false" -n open-cluster-management
+		echo "Waiting 4 minutes for the redisgraph pod to get Ready... " && sleep 240
+    count=0
+	while true ; do
+	  SEARCHOPERATOR=$(kubectl get searchoperator searchoperator -n open-cluster-management -o json | jq '.status.persistence')
+	  echo $SEARCHOPERATOR
+	  count=`expr $count + 1`
+	  if [[ "$SEARCHOPERATOR" == "\"Redisgraph pod running with persistence disabled\"" ]]
 	  then
 	     echo "SUCCESS - Redisgraph Pod Ready"
 		 exit 0
