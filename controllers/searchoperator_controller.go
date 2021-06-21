@@ -56,6 +56,8 @@ const (
 	statusNoPersistence       = "Redisgraph pod running with persistence disabled"
 	redisUser                 = int64(10001)
 	defaultPvcName            = "search-redisgraph-pvc-0"
+	statusUpdateError         = "Error updating operator/customization status. "
+	errorLogStr               = "Error: "
 )
 
 var (
@@ -145,7 +147,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		// Error setting up secret - requeue the request.
 		if err = updateCRs(r.Client, instance, redisNotRunning,
 			custom, persistence, storageClass, storageSize, customValuesInuse); err != nil {
-			r.Log.Info("Error updating operator/customization status. ", "Error: ", err)
+			r.Log.Info(statusUpdateError, errorLogStr, err)
 		}
 		return ctrl.Result{}, err
 	}
@@ -163,7 +165,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		if err != nil {
 			if err = updateCRs(r.Client, instance, redisNotRunning,
 				custom, persistence, storageClass, storageSize, customValuesInuse); err != nil {
-				r.Log.Info("Error updating operator/customization status. ", "Error: ", err)
+				r.Log.Info(statusUpdateError, errorLogStr, err)
 			}
 			return ctrl.Result{}, err
 		}
@@ -201,10 +203,9 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		}
 		pvcError := setupVolume(r.Client)
 		if pvcError != nil {
-			fmt.Println("pvcError: ", pvcError)
 			if err = updateCRs(r.Client, instance, redisNotRunning,
 				custom, persistence, storageClass, storageSize, customValuesInuse); err != nil {
-				r.Log.Info("Error updating operator/customization status. ", "Error: ", err)
+				r.Log.Info(statusUpdateError, errorLogStr, err)
 			}
 			return ctrl.Result{}, pvcError
 		}
@@ -225,7 +226,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			if err != nil {
 				if err = updateCRs(r.Client, instance, redisNotRunning,
 					custom, persistence, storageClass, storageSize, customValuesInuse); err != nil {
-					r.Log.Info("Error updating operator/customization status. ", "Error: ", err)
+					r.Log.Info(statusUpdateError, errorLogStr, err)
 				}
 				return ctrl.Result{}, err
 			}
@@ -233,7 +234,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			if err != nil {
 				if err = updateCRs(r.Client, instance, redisNotRunning,
 					custom, persistence, storageClass, storageSize, customValuesInuse); err != nil {
-					r.Log.Info("Error updating operator/customization status. ", "Error: ", err)
+					r.Log.Info(statusUpdateError, errorLogStr, err)
 				}
 				return ctrl.Result{}, err
 			}
@@ -290,10 +291,10 @@ func (r *SearchOperatorReconciler) reconcileOnError(instance *searchv1alpha1.Sea
 	var err error
 	if err = updateCRs(r.Client, instance, status, custom, false,
 		storageClass, storageSize, customValuesInuse); err != nil {
-		r.Log.Info("Error updating operator/customization status. ", "Error: ", err)
+		r.Log.Info(statusUpdateError, errorLogStr, err)
 	}
 	if err = deleteRedisStatefulSet(r.Client); err != nil {
-		r.Log.Info("Error deleting statefulset. ", "Error: ", err)
+		r.Log.Info("Error deleting statefulset. ", errorLogStr, err)
 	}
 }
 
