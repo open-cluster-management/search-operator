@@ -27,6 +27,7 @@ deploy() {
 	test_invalid_storageclass
 	test_update_podresource_search_operator
 	test_fallback_emptydir
+	test_saverdb_false
 	#delete_kind_hub	
 	#delete_command_binaries
 }
