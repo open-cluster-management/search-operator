@@ -316,7 +316,7 @@ test_update_podresource_search_operator() {
 test_fallback_emptydir() {
 	echo "=====Delete searchcustomization and test fallbackto EmptyDir====="
 	echo -n "Delete searchcustomization: " && kubectl delete searchcustomization searchcustomization 
-	echo -n "Patch searchoperator: " && kubectl patch sc standard -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}' --type='merge'
+	echo -n "Patch storageclass: " && kubectl patch sc standard -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}' --type='merge'
 	echo -n "Scale statefulset : " && kubectl scale statefulset search-redisgraph --replicas=0
 	echo -n "Delete pvc : " && kubectl delete pvc search-redisgraph-pvc-0
 	echo -n "Delete statefulset : " && kubectl delete statefulset search-redisgraph

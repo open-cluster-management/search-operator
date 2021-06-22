@@ -56,6 +56,8 @@ const (
 	statusNoPersistence       = "Redisgraph pod running with persistence disabled"
 	redisUser                 = int64(10001)
 	defaultPvcName            = "search-redisgraph-pvc-0"
+	statusUpdateError         = "Error updating operator/customization status. "
+	errorLogStr               = "Error: "
 )
 
 var (
@@ -143,6 +145,10 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	err = r.setupSecret(r.Client, instance)
 	if err != nil {
 		// Error setting up secret - requeue the request.
+		if err = updateCRs(r.Client, instance, redisNotRunning,
+			custom, persistence, storageClass, storageSize, customValuesInuse); err != nil {
+			r.Log.Info(statusUpdateError, errorLogStr, err)
+		}
 		return ctrl.Result{}, err
 	}
 
@@ -157,6 +163,10 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	if deployVarPresent && deployVarErr == nil && !deploy {
 		err := deleteRedisStatefulSet(r.Client) //if redisgraph pod is already deployed, delete it.
 		if err != nil {
+			if err = updateCRs(r.Client, instance, redisNotRunning,
+				custom, persistence, storageClass, storageSize, customValuesInuse); err != nil {
+				r.Log.Info(statusUpdateError, errorLogStr, err)
+			}
 			return ctrl.Result{}, err
 		}
 		r.Log.Info(`Not deploying the database. This is not an error, it's a current limitation in this environment.
@@ -193,6 +203,10 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		}
 		pvcError := setupVolume(r.Client)
 		if pvcError != nil {
+			if err = updateCRs(r.Client, instance, redisNotRunning,
+				custom, persistence, storageClass, storageSize, customValuesInuse); err != nil {
+				r.Log.Info(statusUpdateError, errorLogStr, err)
+			}
 			return ctrl.Result{}, pvcError
 		}
 		r.executeDeployment(r.Client, instance, true, persistence)
@@ -210,10 +224,18 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			r.Log.Info("Degrading Redisgraph deployment to use empty dir.")
 			err := deleteRedisStatefulSet(r.Client)
 			if err != nil {
+				if err = updateCRs(r.Client, instance, redisNotRunning,
+					custom, persistence, storageClass, storageSize, customValuesInuse); err != nil {
+					r.Log.Info(statusUpdateError, errorLogStr, err)
+				}
 				return ctrl.Result{}, err
 			}
 			err = deletePVC(r.Client)
 			if err != nil {
+				if err = updateCRs(r.Client, instance, redisNotRunning,
+					custom, persistence, storageClass, storageSize, customValuesInuse); err != nil {
+					r.Log.Info(statusUpdateError, errorLogStr, err)
+				}
 				return ctrl.Result{}, err
 			}
 			r.executeDeployment(r.Client, instance, false, persistence)
@@ -269,10 +291,10 @@ func (r *SearchOperatorReconciler) reconcileOnError(instance *searchv1alpha1.Sea
 	var err error
 	if err = updateCRs(r.Client, instance, status, custom, false,
 		storageClass, storageSize, customValuesInuse); err != nil {
-		r.Log.Info("Error updating operator/customization status. ", "Error: ", err)
+		r.Log.Info(statusUpdateError, errorLogStr, err)
 	}
 	if err = deleteRedisStatefulSet(r.Client); err != nil {
-		r.Log.Info("Error deleting statefulset. ", "Error: ", err)
+		r.Log.Info("Error deleting statefulset. ", errorLogStr, err)
 	}
 }
 
