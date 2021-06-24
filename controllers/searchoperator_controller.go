@@ -543,14 +543,14 @@ func updateRedisStatefulSet(client client.Client, deployment *appv1.StatefulSet)
 			return
 		}
 	} else {
-		if !reflect.DeepEqual(found.Spec, deployment.Spec) {
+		if !reflect.DeepEqual(found.Spec, deployment.Spec) || !reflect.DeepEqual(found.GetObjectMeta(), deployment.GetObjectMeta()) {
 			deployment.ObjectMeta.ResourceVersion = found.ObjectMeta.ResourceVersion
 			err = client.Update(context.TODO(), deployment)
 			if err != nil {
 				log.Error(err, "Failed to update deployment")
 				return
 			}
-			log.Info("Volume source updated for redisgraph deployment ")
+			log.Info("Volume source and/or metadata updated for redisgraph deployment")
 		} else {
 			log.Info("No changes for redisgraph deployment ")
 		}
