@@ -543,7 +543,8 @@ func updateRedisStatefulSet(client client.Client, deployment *appv1.StatefulSet)
 			return
 		}
 	} else {
-		if !reflect.DeepEqual(found.Spec, deployment.Spec) || !reflect.DeepEqual(found.GetObjectMeta(), deployment.GetObjectMeta()) {
+		if !reflect.DeepEqual(found.Spec, deployment.Spec) ||
+			!reflect.DeepEqual(found.GetObjectMeta(), deployment.GetObjectMeta()) {
 			deployment.ObjectMeta.ResourceVersion = found.ObjectMeta.ResourceVersion
 			err = client.Update(context.TODO(), deployment)
 			if err != nil {
