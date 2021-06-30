@@ -393,6 +393,20 @@ func int32Ptr(i int32) *int32 { return &i }
 
 func int64Ptr(i int64) *int64 { return &i }
 
+func compareLabels(metadataLabels, ssetLabels map[string]string) bool {
+	allLabelsPresent := true
+	for label, value := range metadataLabels {
+		ssetVal, labelPresent := ssetLabels[label]
+		if labelPresent && (ssetVal == value) {
+			continue
+		} else {
+			allLabelsPresent = false
+			log.Info("Not all labels present in statefulset. Label: ", label, "not found in metadata")
+			break
+		}
+	}
+	return allLabelsPresent
+}
 func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOperator,
 	rdbVolumeSource corev1.VolumeSource, saverdb string) *appv1.StatefulSet {
 	sset := &appv1.StatefulSet{}
@@ -405,7 +419,9 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 	metadataLabels["release"] = releaseName
 	metadataLabels["component"] = component
 	metadataLabels["app"] = appName
-	sset.Labels = metadataLabels
+	if !compareLabels(metadataLabels, sset.Labels) {
+		sset.Labels = metadataLabels
+	}
 	sset.ObjectMeta.Name = statefulSetName
 	sset.ObjectMeta.Namespace = cr.Namespace
 	sset.Spec.Replicas = int32Ptr(1)
