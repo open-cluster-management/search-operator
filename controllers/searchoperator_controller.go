@@ -119,7 +119,8 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		} else {
 			persistence = true
 		}
-		// Allowdegrade mode helps the user to set the controller from switching back to emptydir - and debug users configuration
+		// Allowdegrade mode helps the user to set the controller from switching back to emptydir
+		// and debug users configuration
 		allowdegrade = false
 		storageClass = ""
 		storageSize = "10Gi"
@@ -183,17 +184,17 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		expectedSts := r.expectedStatefulSet(r.Client,
 			instance, true, persistence)
 		//If running PVC deployment nothing to do
-		if persistenceStatus == statusUsingPVC && deployStatus == deploy &&
-			isStatefulSetAvailable(r.Client) && !statefulSetNeedsUpdate(r.Client, expectedSts) && r.isPodRunning(true, 1) {
+		if persistenceStatus == statusUsingPVC && deployStatus == deploy && isStatefulSetAvailable(r.Client) &&
+			!statefulSetNeedsUpdate(r.Client, expectedSts) && r.isPodRunning(true, 1) {
 			r.Log.Info("Redisgraph Pod running successfully with PVC.")
-
 			return ctrl.Result{}, nil
 		}
 		expectedSts = r.expectedStatefulSet(r.Client,
 			instance, false, persistence)
 		//If running degraded deployment AND AllowDegradeMode is set
 		if allowdegrade && persistenceStatus == statusDegradedEmptyDir &&
-			deployStatus == deploy && isStatefulSetAvailable(r.Client) && !statefulSetNeedsUpdate(r.Client, expectedSts) && r.isPodRunning(false, 1) {
+			deployStatus == deploy && isStatefulSetAvailable(r.Client) &&
+			!statefulSetNeedsUpdate(r.Client, expectedSts) && r.isPodRunning(false, 1) {
 			r.Log.Info("Redisgraph Pod running successfully with EmptyDir.")
 			return ctrl.Result{}, nil
 		}
@@ -338,7 +339,8 @@ func (r *SearchOperatorReconciler) restartSearchComponents() {
 			if err != nil && !errors.IsNotFound(err) {
 				r.Log.Info("Failed to delete pods for ", "component", compName)
 				r.Log.Info(err.Error())
-				//Not needed to act on the error as restarting is to offset the timeout - search will continue to function
+				// Not needed to act on the error as restarting is to offset the timeout
+				// search will continue to function
 				continue
 			}
 			r.Log.Info(fmt.Sprintf("%s pod deleted. Namespace/Name: %s/%s", compName, item.Namespace, item.Name))
