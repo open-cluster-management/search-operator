@@ -180,14 +180,21 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		return ctrl.Result{}, nil
 	}
 	if persistence {
+		expectedSts := r.expectedStatefulSet(r.Client,
+			instance, true, persistence)
 		//If running PVC deployment nothing to do
 		if persistenceStatus == statusUsingPVC && deployStatus == deploy &&
-			isStatefulSetAvailable(r.Client) && r.isPodRunning(true, 1) {
+			isStatefulSetAvailable(r.Client) && !statefulSetNeedsUpdate(r.Client, expectedSts) && r.isPodRunning(true, 1) {
+			r.Log.Info("Redisgraph Pod running successfully with PVC.")
+
 			return ctrl.Result{}, nil
 		}
+		expectedSts = r.expectedStatefulSet(r.Client,
+			instance, false, persistence)
 		//If running degraded deployment AND AllowDegradeMode is set
 		if allowdegrade && persistenceStatus == statusDegradedEmptyDir &&
-			deployStatus == deploy && isStatefulSetAvailable(r.Client) && r.isPodRunning(false, 1) {
+			deployStatus == deploy && isStatefulSetAvailable(r.Client) && !statefulSetNeedsUpdate(r.Client, expectedSts) && r.isPodRunning(false, 1) {
+			r.Log.Info("Redisgraph Pod running successfully with EmptyDir.")
 			return ctrl.Result{}, nil
 		}
 		//Restart search-collector pod while setting up Redisgraph pod
@@ -209,6 +216,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 			}
 			return ctrl.Result{}, pvcError
 		}
+		r.Log.Info("PVC volume set up successfully")
 		r.executeDeployment(r.Client, instance, true, persistence)
 		podReady := r.isPodRunning(true, waitSecondsForPodChk)
 		if podReady {
@@ -230,6 +238,7 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 				}
 				return ctrl.Result{}, err
 			}
+			r.Log.Info("Deleted statefulset to move to emptyDir")
 			err = deletePVC(r.Client)
 			if err != nil {
 				if err = updateCRs(r.Client, instance, redisNotRunning,
@@ -238,8 +247,10 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 				}
 				return ctrl.Result{}, err
 			}
+			r.Log.Info("Deleted PVC to move to emptyDir")
 			r.executeDeployment(r.Client, instance, false, persistence)
 			if r.isPodRunning(false, waitSecondsForPodChk) {
+				r.Log.Info("Pod set up and running successfully with emptyDir. Updating status...")
 				//Write Status
 				err := updateCRs(r.Client, instance, statusDegradedEmptyDir,
 					custom, false, "", "", customValuesInuse)
@@ -382,148 +393,147 @@ func int64Ptr(i int64) *int64 { return &i }
 
 func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOperator,
 	rdbVolumeSource corev1.VolumeSource, saverdb string) *appv1.StatefulSet {
+	sset := &appv1.StatefulSet{}
+	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: statefulSetName, Namespace: namespace}, sset)
+	if err != nil {
+		r.Log.Info("Error fetching Statefulset")
+	}
 	bool := false
 	metadataLabels := map[string]string{}
 	metadataLabels["release"] = releaseName
 	metadataLabels["component"] = component
 	metadataLabels["app"] = appName
-	sset := &appv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      statefulSetName,
-			Namespace: cr.Namespace,
-			Labels:    metadataLabels,
+	sset.Labels = metadataLabels
+	sset.ObjectMeta.Name = statefulSetName
+	sset.ObjectMeta.Namespace = cr.Namespace
+	sset.Spec.Replicas = int32Ptr(1)
+	sset.Spec.Selector = &metav1.LabelSelector{
+		MatchLabels: map[string]string{
+			"component": component,
+			"app":       appName,
 		},
-		Spec: appv1.StatefulSetSpec{
-			Replicas: int32Ptr(1),
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					"component": component,
-					"app":       appName,
+	}
+	sset.Spec.Template.ObjectMeta.Labels = metadataLabels
+	sset.Spec.Template.Spec.ServiceAccountName = "search-operator"
+	tol := corev1.Toleration{
+		Key:      "node-role.kubernetes.io/infra",
+		Effect:   corev1.TaintEffectNoSchedule,
+		Operator: corev1.TolerationOpExists,
+	}
+	sset.Spec.Template.Spec.Tolerations = []corev1.Toleration{tol}
+	pullSecret := corev1.LocalObjectReference{
+		Name: cr.Spec.PullSecret,
+	}
+	sset.Spec.Template.Spec.ImagePullSecrets = []corev1.LocalObjectReference{pullSecret}
+	if sset.Spec.Template.Spec.SecurityContext != nil {
+		sset.Spec.Template.Spec.SecurityContext.FSGroup = int64Ptr(redisUser)
+		sset.Spec.Template.Spec.SecurityContext.RunAsUser = int64Ptr(redisUser)
+	} else {
+		sset.Spec.Template.Spec.SecurityContext = &corev1.PodSecurityContext{
+			FSGroup:   int64Ptr(redisUser),
+			RunAsUser: int64Ptr(redisUser),
+		}
+	}
+	sset.Spec.Template.Spec.Containers = []corev1.Container{
+		{
+			Name:  "redisgraph",
+			Image: cr.Spec.SearchImageOverrides.Redisgraph_TLS,
+			Env: []corev1.EnvVar{
+				{
+					Name: "REDIS_PASSWORD",
+					ValueFrom: &corev1.EnvVarSource{
+						SecretKeyRef: &corev1.SecretKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: "redisgraph-user-secret",
+							},
+							Key: "redispwd",
+						},
+					},
+				},
+				{
+					Name:  "REDIS_GRAPH_SSL",
+					Value: "true",
+				},
+				{
+					Name:  "SAVERDB",
+					Value: saverdb,
 				},
 			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						"component": component,
-						"app":       appName,
+			LivenessProbe: &corev1.Probe{
+				InitialDelaySeconds: 10,
+				TimeoutSeconds:      1,
+				PeriodSeconds:       15,
+				SuccessThreshold:    1,
+				FailureThreshold:    3,
+				Handler: corev1.Handler{
+					TCPSocket: &corev1.TCPSocketAction{
+						Port: intstr.FromInt(6380),
 					},
 				},
-				Spec: corev1.PodSpec{
-					ServiceAccountName: "search-operator",
-					Tolerations: []corev1.Toleration{{
-						Key:      "node-role.kubernetes.io/infra",
-						Effect:   corev1.TaintEffectNoSchedule,
-						Operator: corev1.TolerationOpExists,
-					}},
-					ImagePullSecrets: []corev1.LocalObjectReference{{
-						Name: cr.Spec.PullSecret,
-					}},
-					SecurityContext: &corev1.PodSecurityContext{
-						FSGroup:   int64Ptr(redisUser),
-						RunAsUser: int64Ptr(redisUser),
+			},
+			ReadinessProbe: &corev1.Probe{
+				InitialDelaySeconds: 5,
+				TimeoutSeconds:      1,
+				PeriodSeconds:       15,
+				SuccessThreshold:    1,
+				FailureThreshold:    3,
+				Handler: corev1.Handler{
+					TCPSocket: &corev1.TCPSocketAction{
+						Port: intstr.FromInt(6380),
 					},
-					Containers: []corev1.Container{
+				},
+			},
+			Resources: corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					"memory": resource.MustParse(cr.Spec.Redisgraph_Resource.LimitMemory),
+				},
+				Requests: corev1.ResourceList{
+					"cpu":    resource.MustParse(cr.Spec.Redisgraph_Resource.RequestCPU),
+					"memory": resource.MustParse(cr.Spec.Redisgraph_Resource.RequestMemory),
+				},
+			},
+			TerminationMessagePolicy: "File",
+			TerminationMessagePath:   "/dev/termination-log",
+			ImagePullPolicy:          "Always",
+			SecurityContext: &corev1.SecurityContext{
+				Privileged:               &bool,
+				AllowPrivilegeEscalation: &bool,
+			},
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      "redis-graph-certs",
+					MountPath: "/certs",
+				},
+				{
+					Name:      "stunnel-pid",
+					MountPath: "/rg",
+				},
+			},
+		},
+	}
+	sset.Spec.Template.Spec.Volumes = []corev1.Volume{
+		{
+			Name: "stunnel-pid",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		},
+		{
+			Name: "redis-graph-certs",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: "search-redisgraph-secrets",
+					Items: []corev1.KeyToPath{
 						{
-							Name:  "redisgraph",
-							Image: cr.Spec.SearchImageOverrides.Redisgraph_TLS,
-							Env: []corev1.EnvVar{
-								{
-									Name: "REDIS_PASSWORD",
-									ValueFrom: &corev1.EnvVarSource{
-										SecretKeyRef: &corev1.SecretKeySelector{
-											LocalObjectReference: corev1.LocalObjectReference{
-												Name: "redisgraph-user-secret",
-											},
-											Key: "redispwd",
-										},
-									},
-								},
-								{
-									Name:  "REDIS_GRAPH_SSL",
-									Value: "true",
-								},
-								{
-									Name:  "SAVERDB",
-									Value: saverdb,
-								},
-							},
-							LivenessProbe: &corev1.Probe{
-								InitialDelaySeconds: 10,
-								TimeoutSeconds:      1,
-								PeriodSeconds:       15,
-								SuccessThreshold:    1,
-								FailureThreshold:    3,
-								Handler: corev1.Handler{
-									TCPSocket: &corev1.TCPSocketAction{
-										Port: intstr.FromInt(6380),
-									},
-								},
-							},
-							ReadinessProbe: &corev1.Probe{
-								InitialDelaySeconds: 5,
-								TimeoutSeconds:      1,
-								PeriodSeconds:       15,
-								SuccessThreshold:    1,
-								FailureThreshold:    3,
-								Handler: corev1.Handler{
-									TCPSocket: &corev1.TCPSocketAction{
-										Port: intstr.FromInt(6380),
-									},
-								},
-							},
-							Resources: corev1.ResourceRequirements{
-								Limits: corev1.ResourceList{
-									"memory": resource.MustParse(cr.Spec.Redisgraph_Resource.LimitMemory),
-								},
-								Requests: corev1.ResourceList{
-									"cpu":    resource.MustParse(cr.Spec.Redisgraph_Resource.RequestCPU),
-									"memory": resource.MustParse(cr.Spec.Redisgraph_Resource.RequestMemory),
-								},
-							},
-							TerminationMessagePolicy: "File",
-							TerminationMessagePath:   "/dev/termination-log",
-							SecurityContext: &corev1.SecurityContext{
-								Privileged:               &bool,
-								AllowPrivilegeEscalation: &bool,
-							},
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      "redis-graph-certs",
-									MountPath: "/certs",
-								},
-								{
-									Name:      "stunnel-pid",
-									MountPath: "/rg",
-								},
-							},
-						},
-					},
-					Volumes: []corev1.Volume{
-						{
-							Name: "stunnel-pid",
-							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
-							},
+							Key:  "tls.crt",
+							Path: "server.crt",
 						},
 						{
-							Name: "redis-graph-certs",
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName: "search-redisgraph-secrets",
-									Items: []corev1.KeyToPath{
-										{
-											Key:  "tls.crt",
-											Path: "server.crt",
-										},
-										{
-											Key:  "tls.key",
-											Path: "server.key",
-										},
-									},
-								},
-							},
+							Key:  "tls.key",
+							Path: "server.key",
 						},
 					},
+					DefaultMode: int32Ptr(420),
 				},
 			},
 		},
@@ -570,6 +580,7 @@ func updateCRs(kclient client.Client, operatorCR *searchv1alpha1.SearchOperator,
 			return err
 		}
 	}
+	log.Info("Updated status in CRs successfully.")
 	return nil
 }
 
@@ -631,33 +642,53 @@ func updateCustomizationCR(kclient client.Client, cr *searchv1alpha1.SearchCusto
 	return nil
 }
 
-func updateRedisStatefulSet(client client.Client, deployment *appv1.StatefulSet) {
+func statefulSetNeedsUpdate(client client.Client, deployment *appv1.StatefulSet) bool {
 	found := &appv1.StatefulSet{}
 	err := client.Get(context.TODO(), types.NamespacedName{Name: statefulSetName, Namespace: namespace}, found)
 	if err != nil {
-		if errors.IsNotFound(err) {
-			err = client.Create(context.TODO(), deployment)
-			if err != nil {
-				log.Error(err, "Failed to create  deployment")
-				return
-			}
-			log.Info("Created new  deployment ")
-		} else {
-			log.Error(err, "Failed to get deployment")
-			return
-		}
+		return true
 	} else {
 		if !reflect.DeepEqual(found.Spec, deployment.Spec) ||
 			!reflect.DeepEqual(found.GetObjectMeta(), deployment.GetObjectMeta()) {
+			log.Info("Volume source and/or metadata needs to be updated for redisgraph Statefulset")
+			return true
+		} else {
+			log.Info("No changes required for Statefulset")
+			return false
+		}
+	}
+}
+func updateRedisStatefulSet(client client.Client, deployment *appv1.StatefulSet) {
+	createUpdateSTS := statefulSetNeedsUpdate(client, deployment)
+	if !createUpdateSTS {
+		log.Info("No updates required for Statefulset")
+		return
+	}
+	if createUpdateSTS {
+		found := &appv1.StatefulSet{}
+		err := client.Get(context.TODO(), types.NamespacedName{Name: statefulSetName, Namespace: namespace}, found)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				log.Info("Statefulset not found. Creating Statefulset ...")
+				err = client.Create(context.TODO(), deployment)
+				if err != nil {
+					log.Error(err, "Failed to create Statefulset")
+					return
+				}
+				log.Info("Statefulset created successfully")
+				return
+			}
+			log.Error(err, "Failed to fetch Statefulset")
+			return
+		} else {
 			deployment.ObjectMeta.ResourceVersion = found.ObjectMeta.ResourceVersion
 			err = client.Update(context.TODO(), deployment)
 			if err != nil {
-				log.Error(err, "Failed to update deployment")
+				log.Error(err, "Failed to update Statefulset")
 				return
 			}
-			log.Info("Volume source and/or metadata updated for redisgraph deployment ")
-		} else {
-			log.Info("No changes for redisgraph deployment ")
+			log.Info("Volume source and/or metadata updated for redisgraph Statefulset")
+			return
 		}
 	}
 }
@@ -866,7 +897,7 @@ func isReady(pod corev1.Pod, withPVC bool) bool {
 	return false
 }
 
-func (r *SearchOperatorReconciler) executeDeployment(client client.Client,
+func (r *SearchOperatorReconciler) expectedStatefulSet(client client.Client,
 	cr *searchv1alpha1.SearchOperator, usePVC bool, saverdb bool) *appv1.StatefulSet {
 	var statefulSet *appv1.StatefulSet
 	emptyDirVolume := corev1.VolumeSource{
@@ -886,6 +917,12 @@ func (r *SearchOperatorReconciler) executeDeployment(client client.Client,
 	} else {
 		statefulSet = r.getStatefulSet(cr, corev1.VolumeSource{}, "false")
 	}
+	return statefulSet
+}
+
+func (r *SearchOperatorReconciler) executeDeployment(client client.Client,
+	cr *searchv1alpha1.SearchOperator, usePVC bool, saverdb bool) *appv1.StatefulSet {
+	statefulSet := r.expectedStatefulSet(client, cr, usePVC, saverdb)
 	updateRedisStatefulSet(client, statefulSet)
 	return statefulSet
 }
