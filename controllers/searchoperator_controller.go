@@ -149,6 +149,9 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		expectedSts := r.expectedStatefulSet(r.Client,
 			instance, true, persistence)
 		//If running PVC deployment nothing to do
+		// Do nothing if status (persistence and deploy) in searchoperator is up-to-date with statusUsingPVC
+		// and statefulset is available and up-to-date
+		// and pod is running with PVC volume
 		if persistenceStatus == statusUsingPVC && isStatefulSetAvailable(r.Client) &&
 			!statefulSetNeedsUpdate(r.Client, expectedSts) && r.isPodRunning(true, 1) {
 			r.Log.Info("Redisgraph Pod running successfully with PVC.")
@@ -157,6 +160,9 @@ func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		expectedSts = r.expectedStatefulSet(r.Client,
 			instance, false, persistence)
 		//If running degraded deployment AND AllowDegradeMode is set
+		// Do nothing if status (persistence and deploy) in searchoperator is up-to-date with statusDegradedEmptyDir
+		// and statefulset is available and up-to-date
+		// and pod is running with emptyDir volume
 		if allowdegrade && persistenceStatus == statusDegradedEmptyDir && isStatefulSetAvailable(r.Client) &&
 			!statefulSetNeedsUpdate(r.Client, expectedSts) && r.isPodRunning(false, 1) {
 			r.Log.Info("Redisgraph Pod running successfully with EmptyDir.")
@@ -296,6 +302,10 @@ func int32Ptr(i int32) *int32 { return &i }
 
 func int64Ptr(i int64) *int64 { return &i }
 
+// compareLabels compares two map[string]string structs
+// Returns false if all key-value pairs in first map is not in second map
+// Else returns true
+// Used to check if all the expected labels are present in the current running statefulset
 func compareLabels(metadataLabels, ssetLabels map[string]string) bool {
 	allLabelsPresent := true
 	for label, value := range metadataLabels {
@@ -571,37 +581,30 @@ func statefulSetNeedsUpdate(client client.Client, deployment *appv1.StatefulSet)
 }
 
 func updateRedisStatefulSet(client client.Client, deployment *appv1.StatefulSet) {
-	createUpdateSTS := statefulSetNeedsUpdate(client, deployment)
-	if !createUpdateSTS {
-		log.Info("No updates required for Statefulset")
-		return
-	}
-	if createUpdateSTS {
-		found := &appv1.StatefulSet{}
-		err := client.Get(context.TODO(), types.NamespacedName{Name: statefulSetName, Namespace: namespace}, found)
-		if err != nil {
-			if errors.IsNotFound(err) {
-				log.Info("Statefulset not found. Creating Statefulset ...")
-				err = client.Create(context.TODO(), deployment)
-				if err != nil {
-					log.Error(err, "Failed to create Statefulset")
-					return
-				}
-				log.Info("Statefulset created successfully")
-				return
-			}
-			log.Error(err, "Failed to fetch Statefulset")
-			return
-		} else {
-			deployment.ObjectMeta.ResourceVersion = found.ObjectMeta.ResourceVersion
-			err = client.Update(context.TODO(), deployment)
+	found := &appv1.StatefulSet{}
+	err := client.Get(context.TODO(), types.NamespacedName{Name: statefulSetName, Namespace: namespace}, found)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			log.Info("Statefulset not found. Creating Statefulset ...")
+			err = client.Create(context.TODO(), deployment)
 			if err != nil {
-				log.Error(err, "Failed to update Statefulset")
+				log.Error(err, "Failed to create Statefulset")
 				return
 			}
-			log.Info("Volume source and/or metadata updated for redisgraph Statefulset")
+			log.Info("Statefulset created successfully")
 			return
 		}
+		log.Error(err, "Failed to fetch Statefulset")
+		return
+	} else {
+		deployment.ObjectMeta.ResourceVersion = found.ObjectMeta.ResourceVersion
+		err = client.Update(context.TODO(), deployment)
+		if err != nil {
+			log.Error(err, "Failed to update Statefulset")
+			return
+		}
+		log.Info("Volume source and/or metadata updated for redisgraph Statefulset")
+		return
 	}
 }
 
@@ -836,7 +839,10 @@ func (r *SearchOperatorReconciler) expectedStatefulSet(client client.Client,
 func (r *SearchOperatorReconciler) executeDeployment(client client.Client,
 	cr *searchv1alpha1.SearchOperator, usePVC bool, saverdb bool) *appv1.StatefulSet {
 	statefulSet := r.expectedStatefulSet(client, cr, usePVC, saverdb)
-	updateRedisStatefulSet(client, statefulSet)
+	if statefulSetNeedsUpdate(client, statefulSet) {
+		updateRedisStatefulSet(client, statefulSet)
+	}
+	log.Info("No updates required for Statefulset")
 	return statefulSet
 }
 
