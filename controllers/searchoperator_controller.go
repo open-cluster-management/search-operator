@@ -550,7 +550,7 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 			Name: "redis-graph-certs",
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName: "search-redisgraph-secrets",
+					SecretName: "search-redisgraph-certs",
 					Items: []corev1.KeyToPath{
 						{
 							Key:  "tls.crt",
