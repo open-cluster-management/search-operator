@@ -314,7 +314,6 @@ func compareLabels(metadataLabels, ssetLabels map[string]string) bool {
 			continue
 		} else {
 			allLabelsPresent = false
-			log.Info("Not all labels present in statefulset. Label: ", label, "not found in metadata")
 			break
 		}
 	}
@@ -482,7 +481,6 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 			MountPath: "/redis-data",
 		}
 		for i, container := range sset.Spec.Template.Spec.Containers {
-			fmt.Println("i: ", i, "container: ", container)
 			if container.Name == "redisgraph" {
 				sset.Spec.Template.Spec.Containers[i].VolumeMounts =
 					append(sset.Spec.Template.Spec.Containers[i].VolumeMounts, rdbVolumeMount)
