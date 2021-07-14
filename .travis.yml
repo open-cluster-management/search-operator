@@ -60,7 +60,7 @@ jobs:
         - if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then export COMPONENT_TAG_EXTENSION="-PR${TRAVIS_PULL_REQUEST}-${TRAVIS_COMMIT}"; fi;
         # Bootstrap the build harness, pull test image, and run unit tests.  
         - | 
-          make component/pull && make component/test/unit && make security/scans && make sonar/go
+          make component/pull && make component/test/unit && make security/scans
     - stage: test-e2e
       name: "Deploy the image to a cluster and run e2e tests"
       if: type = pull_request
@@ -69,11 +69,6 @@ jobs:
          - if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then export COMPONENT_TAG_EXTENSION="-PR${TRAVIS_PULL_REQUEST}-${TRAVIS_COMMIT}"; fi;
          - |
            make component/pull && make component/test/e2e
-    - stage: release-ff
-      name: "Push commits to current release branch"
-      if: type = push AND branch =~ /^main$/
-      script:
-        - make release-ff
     - stage: publish
       name: "Publish the image to quay with an official version/sha tag and publish entry to integration pipeline stage"
       if: type = push AND branch =~ /^release-[0-9]+\..*$/
