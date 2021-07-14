@@ -10,12 +10,6 @@ go:
 services:
   - docker
 
-addons:
-  sonarcloud:
-    organization: "open-cluster-management"
-    token:
-      secure: "FzxghAaLZvjSDyjrCjurKSZZXNuNre8rkUPKbZoAlp7ha4sOtySVPQGrJIErqmKc/H2S+GJNQ9SxWQuIBGss6Tqcqh9QKGWj0zmlJWxpG3WuCeq53aChr7fmR/bpDnPQfv0kiRfImaIejBvH5xMPq7l/Z/5bpmZ/6kaGMpibtoaJl3o88wKTpzdtoUepLKSrl89bzkk93xfIq3wT+oxskG+312tXmy02hDfJZK8gIiqvzvzcbvJRvwTArPgiaep77F7DCyS1guaKmfTCcL/La+f3yWDh+olS1Z+JNfpItLqe3uehw9MxHi1WbTHmNh7uNFC3/3gMe4rI/SGsO/wReyHD9Cg9nweFpj7L/ytjQUuZaCthfWuovZ5LM9yPV2BFEF+d6VaquKrpl97sjMSdoen/olx428OFKVRupQUfk5ZYGOpgUBiCcdxq8DmbI4hOvvx3pDdXrdoSkAFzS3wVQB9jjaGccu72yWK2zn3DEC497WUAQ7VesqY9NIb5jGl5RVZIdbcac3cBXVerj6iVpAEj4pbyKkmjouY7RaR1ocVvEwBo0Af2TmPvu8gAeMKRe42Y123cb4mhcbgfH7FaFhZpgGR8VVH/AQi5y7gx+/QxHzv4N42QNAraL80anUFn7oPPtXlvIsHqtYTA8VObHfEPVRZOIVPSS4xLnSk54UA="
-
 branches:
   only:
     - main
