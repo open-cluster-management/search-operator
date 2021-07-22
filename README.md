@@ -1,4 +1,4 @@
-# search-operator
+# search-operator 
 Operator for the Search Service.
 This Operator will create the `redisgraph-user-secret` and `search-redisgraph` statefulset. The `search-redisgraph` statefulset uses the `searchoperator` CR instance created during install process for the initial redisgraph pod configuration. The user has an option to update the pod configuration using `searchcustomization` CR.  The goal is to move the search-chart in the near future.
 
