@@ -19,7 +19,7 @@ COPY controllers/ controllers/
 # Build
 RUN CGO_ENABLED=0 go build -a -o manager main.go
 
-FROM registry.access.redhat.com/ubi8/ubi-minimal:8.3
+FROM registry.access.redhat.com/ubi8/ubi-minimal:8.4
 
 RUN microdnf update &&\
     microdnf install ca-certificates vi --nodocs &&\
