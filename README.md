@@ -30,4 +30,6 @@ Update the search-operator deployment yaml with this generated docker image to t
 To create new APIs follow the example command for SearchCustomization CRD.
 - operator-sdk create api --group search.open-cluster-management.io  --version v1alpha1 --kind SearchCustomization --resource=true --controller=true
 
+
+
 Rebuild: 2021-09-10
