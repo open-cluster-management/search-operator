@@ -1,5 +1,6 @@
 #!/bin/bash
 
+echo "SHARED_DIR=$SHARED_DIR"
 KEY="$SHARED_DIR/private.pem"
 chmod 400 "$KEY"
 
