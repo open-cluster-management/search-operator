@@ -53,14 +53,14 @@ setup_kubectl_and_oc_command() {
     fi
    
     #installing jq
-    if ! command -v jq &> /dev/null; then
-        if [[ "$(uname)" == "Linux" ]]; then
+    if [[ "$(uname)" == "Linux" ]]; then
+		echo "Install jq on Linux"
             curl -o jq -L https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
         elif [[ "$(uname)" == "Darwin" ]]; then
+		echo "Install jq on Darwin"
           curl -o jq -L https://github.com/stedolan/jq/releases/download/jq-1.6/jq-osx-amd64
-        fi
-    chmod +x ./jq && sudo mv ./jq /usr/local/bin/jq
     fi
+    chmod +x ./jq && sudo mv ./jq /usr/local/bin/jq
 
 	echo "Current directory"
 	echo $(pwd)
