@@ -112,7 +112,7 @@ delete_command_binaries(){
 initial_setup() {
 echo "=====Initial setup for tests====="
 	echo -n "Switch to namespace: " && kubectl config set-context --current --namespace open-cluster-management
-
+        cd ${WORKDIR}
 	echo "Current directory"
 	echo $(pwd)
 	echo -n "Create namespace open-cluster-management-monitoring: " && kubectl create namespace open-cluster-management
