@@ -61,12 +61,10 @@ setup_kubectl_and_oc_command() {
           curl -o jq -L https://github.com/stedolan/jq/releases/download/jq-1.6/jq-osx-amd64
     fi
     chmod +x ./jq 
-	echo $(./jq --version)
-	echo $(ls -ltr)
     sudo cp ./jq /usr/local/bin/jq
-	echo $(./jq --version)
-	echo $(/usr/local/bin/jq --version)
-    echo $(ls -ltr /usr/local/bin)
+	echo $PATH
+	export PATH=$PATH:.
+	echo $PATH
 	echo "Current directory"
 	echo $(pwd)
 	mv README.md.tmp README.md 
@@ -151,6 +149,8 @@ echo "=====Initial setup for tests====="
 	sed -i '-e' "s~$IMAGE_NAME~{{ OPERATOR_IMAGE }}~g" ./test/operator-deployment.yaml
 }
 test_default_pvc() {
+	echo $PATH
+	echo $(jq --version)
 	echo "Waiting 2 minutes for the redisgraph pod to get Ready... " && sleep 120
 	count=0
 	while true ; do
