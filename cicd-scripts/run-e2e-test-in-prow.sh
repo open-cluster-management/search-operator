@@ -61,7 +61,7 @@ setup_kubectl_and_oc_command() {
           curl -o jq -L https://github.com/stedolan/jq/releases/download/jq-1.6/jq-osx-amd64
     fi
     chmod +x ./jq 
-    sudo cp ./jq /usr/local/bin/jq
+    sudo cp ./jq /usr/bin/jq
 	echo $PATH
 	export PATH=$PATH:.
 	echo $PATH
