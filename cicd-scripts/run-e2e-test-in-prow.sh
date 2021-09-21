@@ -63,7 +63,7 @@ setup_kubectl_and_oc_command() {
     chmod +x ./jq 
 	echo $(./jq --version)
 	echo $(ls -ltr)
-    sudo mv ./jq /usr/local/bin/jq
+    sudo cp ./jq /usr/local/bin/jq
 	echo $(./jq --version)
 	echo $(/usr/local/bin/jq --version)
     echo $(ls -ltr /usr/local/bin)
