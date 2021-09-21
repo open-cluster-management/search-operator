@@ -51,7 +51,16 @@ setup_kubectl_and_oc_command() {
 		tar xzvf openshift-client-linux-4.4.14.tar.gz  # xzf to quiet logs
 		rm openshift-client-linux-4.4.14.tar.gz
     fi
-	# this package has a binary, so:
+   
+    #installing jq
+    if ! command -v jq &> /dev/null; then
+        if [[ "$(uname)" == "Linux" ]]; then
+            curl -o jq -L https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64
+        elif [[ "$(uname)" == "Darwin" ]]; then
+          curl -o jq -L https://github.com/stedolan/jq/releases/download/jq-1.6/jq-osx-amd64
+        fi
+    chmod +x ./jq && mv ./jq ${ROOTDIR}/bin/jq
+    fi
 
 	echo "Current directory"
 	echo $(pwd)
