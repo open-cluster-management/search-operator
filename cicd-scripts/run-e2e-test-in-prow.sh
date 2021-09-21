@@ -9,7 +9,7 @@ echo "IMAGE: " $IMAGE_NAME
 
 DEFAULT_NS="open-cluster-management"
 HUB_KUBECONFIG=$HOME/.kube/kind-config-hub
-WORKDIR=`pwd`
+WORKDIR=/tmp/search-operator
 
 sed_command='sed -i-e -e'
 if [[ "$(uname)" == "Darwin" ]]; then
@@ -70,7 +70,7 @@ setup_kubectl_and_oc_command() {
 }
  
 create_kind_hub() { 
-    WORKDIR=`pwd`
+    WORKDIR=/tmp/search-operator
     if [[ ! -f /usr/local/bin/kind ]]; then
     
     	echo "=====Create kind cluster=====" 
