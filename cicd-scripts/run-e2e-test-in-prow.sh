@@ -59,7 +59,7 @@ setup_kubectl_and_oc_command() {
         elif [[ "$(uname)" == "Darwin" ]]; then
           curl -o jq -L https://github.com/stedolan/jq/releases/download/jq-1.6/jq-osx-amd64
         fi
-    chmod +x ./jq && mv ./jq ${ROOTDIR}/bin/jq
+    chmod +x ./jq && sudo mv ./jq /usr/local/bin/jq
     fi
 
 	echo "Current directory"
