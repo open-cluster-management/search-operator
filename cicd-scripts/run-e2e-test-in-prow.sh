@@ -60,7 +60,11 @@ setup_kubectl_and_oc_command() {
 		echo "Install jq on Darwin"
           curl -o jq -L https://github.com/stedolan/jq/releases/download/jq-1.6/jq-osx-amd64
     fi
-    chmod +x ./jq && sudo mv ./jq /usr/local/bin/jq
+    chmod +x ./jq 
+	echo $(./jq --version)
+    sudo mv ./jq /usr/local/bin/jq
+	echo $(./jq --version)
+	echo $(./usr/local/bin/jq --version)
 
 	echo "Current directory"
 	echo $(pwd)
