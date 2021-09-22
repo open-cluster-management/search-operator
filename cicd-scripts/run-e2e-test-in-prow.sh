@@ -152,6 +152,7 @@ test_default_pvc() {
 	echo $PATH
 	echo $(jq --version)
 	echo "Waiting 2 minutes for the redisgraph pod to get Ready... " && sleep 120
+	kubectl  describe pod `kubectl get pods | grep search-operator |cut -d ' '  -f1`
 	count=0
 	while true ; do
 	  SEARCHOPERATOR=$(kubectl get searchoperator searchoperator -n open-cluster-management -o json | jq '.status.persistence')
