@@ -3,6 +3,11 @@
 
 -include /opt/build-harness/Makefile.prow
 
+.PHONY: unit-test
+unit-test:
+	@echo "Run unit-test"
+	go test ./... -v -coverprofile cover.out
+	go tool cover -html=cover.out -o=cover.html 
 .PHONY: test-e2e
 test-e2e:
 	cicd-scripts/run-e2e-tests.sh
