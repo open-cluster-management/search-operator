@@ -77,7 +77,8 @@ var (
 var startingSpec searchv1alpha1.SearchCustomizationSpec
 var deployStatus bool
 
-func (r *SearchOperatorReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+func (r *SearchOperatorReconciler) Reconcile(con context.Context, req ctrl.Request) (ctrl.Result, error) {
+
 	_ = context.Background()
 	_ = r.Log.WithValues("searchoperator", req.NamespacedName)
 	// Fetch the SearchOperator instance
@@ -358,25 +359,25 @@ func (r *SearchOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	watchNamespace := os.Getenv("WATCH_NAMESPACE")
 	pred := predicate.Funcs{
 		CreateFunc: func(e event.CreateEvent) bool {
-			return e.Meta.GetNamespace() == watchNamespace
+			return e.Object.GetNamespace() == watchNamespace
 		},
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			if e.MetaNew.GetNamespace() == watchNamespace &&
-				e.MetaNew.GetGeneration() != e.MetaOld.GetGeneration() {
+			if e.ObjectNew.GetNamespace() == watchNamespace &&
+				e.ObjectNew.GetGeneration() != e.ObjectOld.GetGeneration() {
 				return true
 			}
 			return false
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
-			if e.Meta.GetNamespace() == watchNamespace {
+			if e.Object.GetNamespace() == watchNamespace {
 				return !e.DeleteStateUnknown
 			}
 			return false
 		},
 	}
 
-	searchCustomizationFn := handler.ToRequestsFunc(
-		func(a handler.MapObject) []reconcile.Request {
+	searchCustomizationFn := handler.MapFunc(
+		func(a client.Object) []reconcile.Request {
 			return []reconcile.Request{
 				{NamespacedName: types.NamespacedName{
 					Name:      "searchcustomization",
@@ -389,10 +390,8 @@ func (r *SearchOperatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&searchv1alpha1.SearchOperator{}).
 		Owns(&appv1.StatefulSet{}).
 		Owns(&corev1.Secret{}).
-		Watches(&source.Kind{Type: &searchv1alpha1.SearchCustomization{}},
-			&handler.EnqueueRequestsFromMapFunc{ToRequests: searchCustomizationFn}).
-		WithEventFilter(pred).
-		Complete(r)
+		Watches(&source.Kind{Type: &searchv1alpha1.SearchCustomization{}}, handler.EnqueueRequestsFromMapFunc(searchCustomizationFn)).
+		WithEventFilter(pred).Complete(r)
 }
 
 func int32Ptr(i int32) *int32 { return &i }
