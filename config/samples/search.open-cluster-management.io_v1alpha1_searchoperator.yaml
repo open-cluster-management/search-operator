@@ -13,4 +13,4 @@ spec:
   pullpolicy: Always
   pullsecret: multiclusterhub-operator-pull-secret
   searchimageoverrides:
-    redisgraph_tls: quay.io/open-cluster-management/redisgraph-tls:2.2.0-PR40-82f419595a22d6f15538ae2379b3f286e0273539
+    redisgraph_tls: quay.io/open-cluster-management/redisgraph-tls:2.4.0-e2ec66da43abff85a7fcf56f22ed5849e0589069 
