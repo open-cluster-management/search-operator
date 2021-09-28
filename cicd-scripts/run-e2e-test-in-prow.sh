@@ -16,6 +16,15 @@ if [[ "$(uname)" == "Darwin" ]]; then
 	sed_command='sed -i '-e' -e'
 fi
 
+if [[ -z "${DOCKER_USER}" ]]; then
+  DOCKER_USER="open-cluster-management+acmsearch"
+fi
+
+if [[ -z "${DOCKER_PASS}" ]]; then
+  DOCKER_PASS=$2
+fi
+
+
 deploy() {
     setup_kubectl_and_oc_command
 	create_kind_hub
