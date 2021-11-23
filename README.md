@@ -33,4 +33,4 @@ To create new APIs follow the example command for SearchCustomization CRD.
 
 - operator-sdk create api --group search.open-cluster-management.io  --version v1alpha1 --kind SearchCustomization --resource=true --controller=true
 
-Rebuild: 2021-10-18
+Rebuild: 2021-11-23
