@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"testing"
 
-	searchv1alpha1 "github.com/open-cluster-management/search-operator/api/v1alpha1"
+	searchv1alpha1 "github.com/stolostron/search-operator/api/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -459,7 +459,7 @@ func createFakeRedisGraphPod(namespace string, persistence, schedulable bool) *c
 	labels := map[string]string{}
 	labels["app"] = appName
 	labels["component"] = component
-	image := "quay.io/open-cluster-management/search-operator:latest"
+	image := "quay.io/stolostron/search-operator:latest"
 	containerStatuses := []corev1.ContainerStatus{}
 	containerStatus := corev1.ContainerStatus{Ready: true}
 	containerStatuses = append(containerStatuses, containerStatus)
