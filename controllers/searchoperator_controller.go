@@ -17,7 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/go-logr/logr"
-	searchv1alpha1 "github.com/open-cluster-management/search-operator/api/v1alpha1"
+	searchv1alpha1 "github.com/stolostron/search-operator/api/v1alpha1"
 	appv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -172,7 +172,7 @@ func (r *SearchOperatorReconciler) Reconcile(con context.Context, req ctrl.Reque
 			return ctrl.Result{}, err
 		}
 		r.Log.Info(`Not deploying the database. This is not an error, it's a current limitation in this environment.
-	The search feature is not operational.  More info: https://github.com/open-cluster-management/community/issues/34`)
+	The search feature is not operational.  More info: https://github.com/open-cluster-management-io/community/issues/34`)
 		//Write Status
 		err = updateCRs(r.Client, instance, redisNotRunning,
 			custom, persistence, storageClass, storageSize, customValuesInuse)
@@ -492,7 +492,7 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 				PeriodSeconds:       15,
 				SuccessThreshold:    1,
 				FailureThreshold:    3,
-				Handler: corev1.Handler{
+				ProbeHandler: corev1.ProbeHandler{
 					TCPSocket: &corev1.TCPSocketAction{
 						Port: intstr.FromInt(6380),
 					},
@@ -504,7 +504,7 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 				PeriodSeconds:       15,
 				SuccessThreshold:    1,
 				FailureThreshold:    3,
-				Handler: corev1.Handler{
+				ProbeHandler: corev1.ProbeHandler{
 					TCPSocket: &corev1.TCPSocketAction{
 						Port: intstr.FromInt(6380),
 					},
