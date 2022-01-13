@@ -22,7 +22,7 @@ https://v1-2-x.sdk.operatorframework.io/docs/installation/install-operator-sdk/
 ### Build the Operator
 
 - git clone this repository.
-- operator-sdk init --domain="" --repo=github.com/open-cluster-management/search-operator   --verbose
+- operator-sdk init --domain="" --repo=github.com/stolostron/search-operator   --verbose
 - make generate
 - make manifests
 - make docker-build

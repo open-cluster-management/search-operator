@@ -17,7 +17,7 @@ if [[ "$(uname)" == "Darwin" ]]; then
 fi
 
 if [[ -z "${DOCKER_USER}" ]]; then
-  DOCKER_USER="open-cluster-management+acmsearch"
+  DOCKER_USER="stolostron+acmsearch"
 fi
 
 if [[ -z "${DOCKER_PASS}" ]]; then
@@ -136,9 +136,9 @@ echo "=====Initial setup for tests====="
         cd ${WORKDIR}
 	echo "Current directory"
 	echo $(pwd)
-	echo -n "Create namespace open-cluster-management-monitoring: " && kubectl create namespace open-cluster-management
+	echo -n "Create namespace open-cluster-management: " && kubectl create namespace open-cluster-management
     echo -n "Creating pull secret: " && kubectl create secret docker-registry search-operator-pull-secret --docker-server=quay.io --docker-username=$DOCKER_USER --docker-password=$DOCKER_PASS
-	# git clone https://github.com/open-cluster-management/search-operator.git
+	# git clone https://github.com/stolostron/search-operator.git
 
 	# cd search-operator
     echo -n "Applying search operator CRD:" && kubectl apply -f ./config/crd/bases/search.open-cluster-management.io_searchoperators.yaml
