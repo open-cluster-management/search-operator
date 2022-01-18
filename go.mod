@@ -1,4 +1,4 @@
-module github.com/open-cluster-management/search-operator
+module github.com/stolostron/search-operator
 
 go 1.13
 

@@ -27,8 +27,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	searchopenclustermanagementiov1 "github.com/open-cluster-management/search-operator/api/v1alpha1"
-	"github.com/open-cluster-management/search-operator/controllers"
+	searchopenclustermanagementiov1 "github.com/stolostron/search-operator/api/v1alpha1"
+	"github.com/stolostron/search-operator/controllers"
 	// +kubebuilder:scaffold:imports
 )
 
