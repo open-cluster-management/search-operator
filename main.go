@@ -22,6 +22,7 @@ import (
 	"flag"
 	"os"
 
+	"github.com/stolostron/search-operator/addon"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -79,10 +80,25 @@ func main() {
 		os.Exit(1)
 	}
 
+	ctx := ctrl.SetupSignalHandler()
+
+	kubeConfig, err := ctrl.GetConfig()
+	if err != nil {
+		setupLog.Error(err, "unable to get kubeConfig", "controller", "SearchOperator")
+		os.Exit(1)
+	}
+	addonMgr, err := addon.NewAddonManager(kubeConfig)
+	if err != nil {
+		setupLog.Error(err, "unable to create a new  addon manager", "controller", "SearchOperator")
+	} else {
+		setupLog.Info("starting search addon manager")
+		go addonMgr.Start(ctx)
+	}
+
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}

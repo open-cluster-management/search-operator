@@ -141,6 +141,7 @@ echo "=====Initial setup for tests====="
 	# git clone https://github.com/stolostron/search-operator.git
 
 	# cd search-operator
+	  echo -n "Applying ocm CRDs:" && kubectl apply -f ./config/crd/ocm
     echo -n "Applying search operator CRD:" && kubectl apply -f ./config/crd/bases/search.open-cluster-management.io_searchoperators.yaml
     echo -n "Applying search customization CRD:" && kubectl apply -f ./config/crd/bases/search.open-cluster-management.io_searchcustomizations.yaml
     echo -n "Applying sample search operator: " && kubectl apply -f ./config/samples/search.open-cluster-management.io_v1alpha1_searchoperator.yaml
