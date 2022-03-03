@@ -36,6 +36,8 @@ spec:
               fieldPath: metadata.name
         - name: OPERATOR_NAME
           value: "search-operator"
+        - name: SEARCH_COLLECTOR_IMAGE_NAME
+          value: "quay.io/stolostron/search_collector:latest"
         resources:
           limits:
             memory: 256Mi
