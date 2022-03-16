@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Red Hat, Inc.
+// Copyright (c) 2022 Red Hat, Inc.
 // Copyright Contributors to the Open Cluster Management project
 
 package controllers
@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	redisconfigmap = "search_redisgraph_customization"
+	redisconfigmap = "redis-conf"
 )
 
 func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOperator,

@@ -268,7 +268,7 @@ func Test_StatefulsetWithPVCAndConfigmap(t *testing.T) {
 
 	assert.Equal(t, testStatefulset.Name, foundStatefulset.Name, "Statefulset is created with expected name.")
 	assert.Equal(t, testStatefulset.Namespace, foundStatefulset.Namespace, "Statefulset is created in expected namespace.")
-	assert.EqualValues(t, "search_redisgraph_customization", foundStatefulset.Spec.Template.Spec.Volumes[3].Name, "Statefulset is created with expected volume.")
+	assert.EqualValues(t, "redis-conf", foundStatefulset.Spec.Template.Spec.Volumes[3].Name, "Statefulset is created with expected volume.")
 	assert.EqualValues(t, "/redis-config", foundStatefulset.Spec.Template.Spec.Containers[0].VolumeMounts[3].MountPath, "Statefulset is created with expected moount path.")
 	assert.Equal(t, statusUsingPVC, instance.Status.PersistenceStatus, "Search Operator status updated with statusUsingPVC as expected.")
 
