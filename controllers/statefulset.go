@@ -298,6 +298,12 @@ func addRGConfigmap(sset *appv1.StatefulSet) {
 				LocalObjectReference: v1.LocalObjectReference{
 					Name: redisconfigmap,
 				},
+				Items: []corev1.KeyToPath{
+					{
+						Key:  "redis-conf",
+						Path: "redis.conf",
+					},
+				},
 			},
 		},
 	}
