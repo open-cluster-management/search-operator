@@ -31,6 +31,7 @@ type testSetup struct {
 	statefulsetWithPVC    *appv1.StatefulSet
 	statefulsetWithOutPVC *appv1.StatefulSet
 	pvc                   *corev1.PersistentVolumeClaim
+	customConfigMap       *corev1.ConfigMap
 	podWithPVC            *corev1.Pod
 	podWithOutPVC         *corev1.Pod
 	unSchedulablePod      *corev1.Pod
@@ -82,6 +83,7 @@ func commonSetup() testSetup {
 	fakePodWithOutPVC := createFakeRedisGraphPod(namespace, false, true)
 	fakeUnschedulablePod := createFakeRedisGraphPod(namespace, false, false)
 	fakeSearchCustCR := createFakeSearchCustomizationCR(namespace, false)
+	fakeRedisCustomCM := createRedisCustomConfigmap(namespace)
 	testSetup := testSetup{scheme: testScheme,
 		request:               req,
 		srchOperator:          testSearchOperator,
@@ -89,6 +91,7 @@ func commonSetup() testSetup {
 		statefulsetWithPVC:    testStatefulsetWithPVC,
 		statefulsetWithOutPVC: testStatefulsetWithOutPVC,
 		pvc:                   fakePVC,
+		customConfigMap:       fakeRedisCustomCM,
 		podWithPVC:            fakePodWithPVC,
 		podWithOutPVC:         fakePodWithOutPVC,
 		unSchedulablePod:      fakeUnschedulablePod,
@@ -232,6 +235,41 @@ func Test_StatefulsetWithPVC(t *testing.T) {
 	assert.Equal(t, testStatefulset.Name, foundStatefulset.Name, "Statefulset is created with expected name.")
 	assert.Equal(t, testStatefulset.Namespace, foundStatefulset.Namespace, "Statefulset is created in expected namespace.")
 	assert.EqualValues(t, testStatefulset.Spec.Template.Spec, foundStatefulset.Spec.Template.Spec, "Statefulset is created with expected template spec.")
+	assert.Equal(t, statusUsingPVC, instance.Status.PersistenceStatus, "Search Operator status updated with statusUsingPVC as expected.")
+
+}
+
+func Test_StatefulsetWithPVCAndConfigmap(t *testing.T) {
+	testSetup := commonSetup()
+	req := testSetup.request
+	testStatefulset := testSetup.statefulsetWithPVC
+
+	client := fake.NewFakeClientWithScheme(testSetup.scheme, testSetup.srchOperator, testSetup.secret, testSetup.pvc, testSetup.podWithPVC, testSetup.customConfigMap)
+	nilSearchOperator := SearchOperatorReconciler{client, log, testSetup.scheme}
+	var err error
+
+	instance := &searchv1alpha1.SearchOperator{}
+	err = client.Get(context.TODO(), req.NamespacedName, instance)
+	assert.Nil(t, err, "Expected search Operator to be created. Got error: %v", err)
+
+	//Persistence is enabled by default in search operator
+	_, err = nilSearchOperator.Reconcile(testSetup.context, req)
+	//Calling reconcile again to check if shorter path with 1 sec wait time is used the second time
+	_, err = nilSearchOperator.Reconcile(testSetup.context, req)
+	assert.Nil(t, err, "Expected search Operator reconcile to complete successfully. Got error: %v", err)
+
+	err = client.Get(context.TODO(), req.NamespacedName, instance)
+	assert.Nil(t, err, "Expected search Operator to be created. Got error: %v", err)
+
+	foundStatefulset := &appv1.StatefulSet{}
+	err = client.Get(context.TODO(), types.NamespacedName{Name: testStatefulset.Name, Namespace: testStatefulset.Namespace}, foundStatefulset)
+
+	assert.Nil(t, err, "Expected Statefulset to be created. Got error: %v", err)
+
+	assert.Equal(t, testStatefulset.Name, foundStatefulset.Name, "Statefulset is created with expected name.")
+	assert.Equal(t, testStatefulset.Namespace, foundStatefulset.Namespace, "Statefulset is created in expected namespace.")
+	assert.EqualValues(t, "redis-conf", foundStatefulset.Spec.Template.Spec.Volumes[3].Name, "Statefulset is created with expected volume.")
+	assert.EqualValues(t, "/redis-config", foundStatefulset.Spec.Template.Spec.Containers[0].VolumeMounts[3].MountPath, "Statefulset is created with expected moount path.")
 	assert.Equal(t, statusUsingPVC, instance.Status.PersistenceStatus, "Search Operator status updated with statusUsingPVC as expected.")
 
 }
@@ -454,6 +492,15 @@ func createFakeNamedPVC(requestBytes string, namespace string, userAnnotations m
 		},
 	}
 }
+func createRedisCustomConfigmap(namespace string) *corev1.ConfigMap {
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      redisconfigmap,
+			Namespace: namespace,
+		},
+	}
+	return cm
+}
 
 func createFakeRedisGraphPod(namespace string, persistence, schedulable bool) *corev1.Pod {
 	labels := map[string]string{}
@@ -476,7 +523,6 @@ func createFakeRedisGraphPod(namespace string, persistence, schedulable bool) *c
 	persistentVolSource := corev1.PersistentVolumeClaimVolumeSource{ClaimName: pvcName}
 	emptyDirVolSource := corev1.EmptyDirVolumeSource{}
 	var volSource corev1.VolumeSource
-
 	if !schedulable {
 		return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Labels: labels}, Spec: corev1.PodSpec{Volumes: []corev1.Volume{{VolumeSource: volSource}}, Containers: []corev1.Container{{Image: image}}}, Status: status}
 	}
