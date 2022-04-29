@@ -103,7 +103,7 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 				FailureThreshold:    3,
 				ProbeHandler: corev1.ProbeHandler{
 					TCPSocket: &corev1.TCPSocketAction{
-						Port: intstr.FromInt(6380),
+						Port: intstr.FromInt(6379),
 					},
 				},
 			},
