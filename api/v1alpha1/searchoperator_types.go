@@ -15,6 +15,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -35,9 +36,13 @@ type SearchOperatorSpec struct {
 
 	PullSecret string `json:"pullsecret,omitempty"`
 
-	// NodeSelector causes all components to be scheduled on nodes with matching labels.
+	// NodeSelector causes RedisGraph to be scheduled on nodes with matching labels.
 	// +optional
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+
+	// Tolerations causes RedisGraph to be scheduled on nodes with matching labels.
+	// +optional
+	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
 }
 
 // SearchOperatorStatus defines the observed state of SearchOperator
