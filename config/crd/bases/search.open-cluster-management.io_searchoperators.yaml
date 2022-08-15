@@ -13,6 +13,8 @@ spec:
     kind: SearchOperator
     listKind: SearchOperatorList
     plural: searchoperators
+    shortNames:
+    - srcho
     singular: searchoperator
   scope: Namespaced
   subresources:
@@ -47,24 +49,28 @@ spec:
             pullsecret:
               type: string
             redisgraph_resource:
-              properties:
-                limit_cpu:
-                  description: Limit CPU
-                  type: string
-                limit_memory:
-                  description: Limit Memory
-                  type: string
-                request_cpu:
-                  description: Request CPU
-                  type: string
-                request_memory:
-                  description: Request memory
-                  type: string
-              required:
-              - limit_memory
-              - request_cpu
-              - request_memory
-              type: object
+                properties:
+                  limit_cpu:
+                    description: Limit CPU
+                    type: string
+                    pattern: "[0-9\\.]+m?"
+                  limit_memory:
+                    description: Limit Memory
+                    type: string
+                    pattern: "[0-9\\.]+(G|Gi|M|Mi|K|Ki)?"
+                  request_cpu:
+                    description: Request CPU
+                    type: string
+                    pattern: "[0-9\\.]+m?"
+                  request_memory:
+                    description: Request memory
+                    type: string
+                    pattern: "[0-9\\.]+(G|Gi|M|Mi|K|Ki)?"
+                required:
+                - limit_memory
+                - request_cpu
+                - request_memory
+                type: object
             searchimageoverrides:
               description: Image to use in deployment
               properties:
