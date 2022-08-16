@@ -51,12 +51,10 @@ func (r *SearchOperatorReconciler) getStatefulSet(cr *searchv1alpha1.SearchOpera
 	}
 	sset.Spec.Template.ObjectMeta.Labels = metadataLabels
 	sset.Spec.Template.Spec.ServiceAccountName = "search-operator"
-	tol := corev1.Toleration{
-		Key:      "node-role.kubernetes.io/infra",
-		Effect:   corev1.TaintEffectNoSchedule,
-		Operator: corev1.TolerationOpExists,
+	if cr.Spec.Tolerations != nil {
+		sset.Spec.Template.Spec.Tolerations = cr.Spec.Tolerations
+		log.Info("Added Tolerations")
 	}
-	sset.Spec.Template.Spec.Tolerations = []corev1.Toleration{tol}
 	pullSecret := corev1.LocalObjectReference{
 		Name: cr.Spec.PullSecret,
 	}
