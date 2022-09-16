@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"regexp"
+	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -20,6 +22,7 @@ import (
 	"open-cluster-management.io/addon-framework/pkg/utils"
 	addonapiv1alpha1 "open-cluster-management.io/api/addon/v1alpha1"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 const (
@@ -38,7 +41,9 @@ const (
 var ChartFS embed.FS
 
 const ChartDir = "manifests/chart"
+const resourceLimitReg = "^(\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))))?$"
 
+var addonLog = ctrl.Log.WithName("addon")
 var SearchCollectorImage string = os.Getenv("SEARCH_COLLECTOR_IMAGE_NAME")
 
 type GlobalValues struct {
@@ -49,8 +54,17 @@ type GlobalValues struct {
 	ProxyConfig     map[string]string `json:"proxyConfig,"`
 }
 
+type UserArgs struct {
+	ContainerArgs  string `json:"containerArgs,"`
+	MaxMemory      string `json:"maxMemory,"`
+	RediscoverRate int    `json:"rediscoverRate,"`
+	HeartBeat      int    `json:"heartBeat,"`
+	ReportRate     int    `json:"reportRate,"`
+}
+
 type Values struct {
 	GlobalValues GlobalValues `json:"global,"`
+	UserArgs     UserArgs     `json:"userargs,"`
 }
 
 func getValue(cluster *clusterv1.ManagedCluster,
@@ -70,7 +84,37 @@ func getValue(cluster *clusterv1.ManagedCluster,
 			},
 		},
 	}
+	if val, ok := addon.GetAnnotations()["addon.open-cluster-management.io/search_memory_limit"]; ok {
+		match, err := regexp.MatchString(resourceLimitReg, val)
+		if err != nil {
+			addonLog.Info("Error parsing memory limit for cluster %s", cluster.ClusterName)
+		}
+		if match {
+			addonValues.UserArgs.MaxMemory = val
+		}
+	}
+	if val, ok := addon.GetAnnotations()["addon.open-cluster-management.io/search_args"]; ok {
+		addonValues.UserArgs.ContainerArgs = val
+	}
+	if val, ok := addon.GetAnnotations()["addon.open-cluster-management.io/search_rediscover_rate"]; ok {
+		intVal, err := strconv.Atoi(val)
+		if err == nil {
+			addonValues.UserArgs.RediscoverRate = intVal
+		}
 
+	}
+	if val, ok := addon.GetAnnotations()["addon.open-cluster-management.io/search_heartbeat"]; ok {
+		intVal, err := strconv.Atoi(val)
+		if err == nil {
+			addonValues.UserArgs.HeartBeat = intVal
+		}
+	}
+	if val, ok := addon.GetAnnotations()["addon.open-cluster-management.io/search_report_rate"]; ok {
+		intVal, err := strconv.Atoi(val)
+		if err == nil {
+			addonValues.UserArgs.ReportRate = intVal
+		}
+	}
 	values, err := addonfactory.JsonStructToValues(addonValues)
 	if err != nil {
 		return nil, err
