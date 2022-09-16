@@ -19,14 +19,15 @@ tolerations:
   operator: Exists
   effect: NoSchedule
 
-resources:
-  requests:
-    memory: 128Mi
-  limits:
-    memory: 512Mi
 
 logLevel: null
 
+userargs:
+  containerArgs: null
+  limitMemory: 1024Mi
+  rediscoverRate: null
+  heartBeat: null
+  reportRate: null
 global: 
   imagePullPolicy: IfNotPresent
   imagePullSecret: open-cluster-management-image-pull-credentials

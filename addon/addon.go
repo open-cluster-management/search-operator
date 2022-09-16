@@ -56,7 +56,7 @@ type GlobalValues struct {
 
 type UserArgs struct {
 	ContainerArgs  string `json:"containerArgs,"`
-	MaxMemory      string `json:"maxMemory,"`
+	LimitMemory    string `json:"limitMemory,"`
 	RediscoverRate int    `json:"rediscoverRate,"`
 	HeartBeat      int    `json:"heartBeat,"`
 	ReportRate     int    `json:"reportRate,"`
@@ -90,7 +90,7 @@ func getValue(cluster *clusterv1.ManagedCluster,
 			addonLog.Info("Error parsing memory limit for cluster %s", cluster.ClusterName)
 		}
 		if match {
-			addonValues.UserArgs.MaxMemory = val
+			addonValues.UserArgs.LimitMemory = val
 		}
 	}
 	if val, ok := addon.GetAnnotations()["addon.open-cluster-management.io/search_args"]; ok {

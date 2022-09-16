@@ -66,9 +66,9 @@ spec:
         resources:
           requests:
             memory: 128Mi
-          {{- if .Values.userargs.maxMemory }}
+          {{- if .Values.userargs.limitMemory }}
           limits:
-            memory: {{ .Values.userargs.maxMemory }}
+            memory: {{ .Values.userargs.limitMemory }}
           {{- else }}
           limits:
             memory: 1024Mi
