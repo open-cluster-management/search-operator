@@ -88,8 +88,7 @@ func getValue(cluster *clusterv1.ManagedCluster,
 		match, err := regexp.MatchString(resourceLimitReg, val)
 		if err != nil {
 			addonLog.Info("Error parsing memory limit for cluster %s", cluster.ClusterName)
-		}
-		if match {
+		} else if match {
 			addonValues.UserArgs.LimitMemory = val
 		}
 	}
