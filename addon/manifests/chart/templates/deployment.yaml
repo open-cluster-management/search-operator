@@ -64,8 +64,13 @@ spec:
           value: {{ .Values.global.proxyConfig.NO_PROXY }}
         {{- end }}
         resources:
+          {{- if .Values.userargs.requestMemory }}
+          requests:
+            memory: {{ .Values.userargs.requestMemory }}
+          {{- else }}
           requests:
             memory: 128Mi
+          {{- end }}
           {{- if .Values.userargs.limitMemory }}
           limits:
             memory: {{ .Values.userargs.limitMemory }}

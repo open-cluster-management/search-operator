@@ -25,6 +25,7 @@ logLevel: null
 userargs:
   containerArgs: null
   limitMemory: 1024Mi
+  requestMemory: 128Mi
   rediscoverRate: null
   heartBeat: null
   reportRate: null
