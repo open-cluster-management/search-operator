@@ -91,12 +91,14 @@ func TestManifest(t *testing.T) {
 	annotationsTest := map[string]string{"addon.open-cluster-management.io/values": `{"global":{"nodeSelector":{"node-role.kubernetes.io/infra":""},"imageOverrides":
 	{"search_collector":"quay.io/test/search_collector:test"}}}`,
 		"addon.open-cluster-management.io/search_memory_limit":    "2000Mi",
+		"addon.open-cluster-management.io/search_memory_request":  "1000Mi",
 		"addon.open-cluster-management.io/search_rediscover_rate": "4000",
 		"addon.open-cluster-management.io/search_heartbeat":       "3000",
 		"addon.open-cluster-management.io/search_report_rate":     "2000",
 		"addon.open-cluster-management.io/search_args":            "--v=2"}
 	annotations250 := map[string]string{"addon.open-cluster-management.io/values": "",
 		"addon.open-cluster-management.io/search_memory_limit":    "2000Mi",
+		"addon.open-cluster-management.io/search_memory_request":  "1000Mi",
 		"addon.open-cluster-management.io/search_rediscover_rate": "4000",
 		"addon.open-cluster-management.io/search_args":            "--v=2",
 		"addon.open-cluster-management.io/search_heartbeat":       "3000",
@@ -109,6 +111,7 @@ func TestManifest(t *testing.T) {
 		expectedImage          string
 		expectedCount          int
 		expectedLimit          string
+		expectedRequest        string
 		expectedArgs           string
 		expectedHeartBeat      string
 		expectedRediscoverRate string
@@ -122,6 +125,7 @@ func TestManifest(t *testing.T) {
 			expectedImage:          "quay.io/test/search_collector:test",
 			expectedCount:          4,
 			expectedLimit:          "2000Mi",
+			expectedRequest:        "1000Mi",
 			expectedArgs:           "--v=2",
 			expectedHeartBeat:      "3000",
 			expectedRediscoverRate: "4000",
@@ -135,6 +139,7 @@ func TestManifest(t *testing.T) {
 			expectedImage:          "quay.io/stolostron/search_collector:2.5.0",
 			expectedCount:          4,
 			expectedLimit:          "2000Mi",
+			expectedRequest:        "1000Mi",
 			expectedArgs:           "--v=2",
 			expectedHeartBeat:      "3000",
 			expectedRediscoverRate: "4000",
@@ -166,6 +171,9 @@ func TestManifest(t *testing.T) {
 					}
 					if object.Spec.Template.Spec.Containers[0].Resources.Limits.Memory().String() != test.expectedLimit {
 						t.Errorf("expected limit is %s, but got %s", test.expectedLimit, object.Spec.Template.Spec.Containers[0].Resources.Limits.Memory().String())
+					}
+					if object.Spec.Template.Spec.Containers[0].Resources.Requests.Memory().String() != test.expectedRequest {
+						t.Errorf("expected request is %s, but got %s", test.expectedRequest, object.Spec.Template.Spec.Containers[0].Resources.Requests.Memory().String())
 					}
 					if object.Spec.Template.Spec.Containers[0].Args[0] != test.expectedArgs {
 						t.Errorf("expected args is %s, but got %s", test.expectedLimit, object.Spec.Template.Spec.Containers[0].Args[0])
