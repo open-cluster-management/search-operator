@@ -1,3 +1,8 @@
+# This project is deprecated.
+- The functionality has been reimplemented in the new project https://github.com/stolostron/search-v2-operator
+- The last RHACM release using this project is RHACM 2.6
+- This project will be archived once RHACM 2.6 reaches end of life (EOL).
+
 # search-operator
 
 Operator for the Search Service.
