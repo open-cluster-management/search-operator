@@ -2,7 +2,7 @@
 // Copyright Contributors to the Open Cluster Management project
 module github.com/stolostron/search-operator
 
-go 1.18
+go 1.20
 
 require (
 	github.com/go-logr/logr v1.2.3
